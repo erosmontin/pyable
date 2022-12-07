@@ -9,7 +9,10 @@ import matplotlib.pyplot as plt
 
 
 
-
+def saveNumpy(x,fn,ref=None):
+    T=Imaginable()
+    T.setImageFromNumpy(x,refimage=ref)
+    T.writeImageAs(fn)
 
 def getTransformFromFile(h):
     if not pn.isCollection(h):
@@ -204,12 +207,12 @@ class Imaginable:
         o=np.transpose(self.getImageAsNumpyZYX(), L)
         return o
 
-    def setImageFromNumpy(self):
-        
-        L=list(range(self.getImageDimension()))
+    def setImageFromNumpy(self,nparray,refimage=None, vector=False,spacing=None,origin=None,direction=None):
+        L=list(range(len(nparray.shape)))
         L.reverse()
-        o=np.transpose(self.getImageAsNumpyZYX(), L)
-        return o
+        o=np.transpose(nparray, L)
+        self.setImageFromNumpyZYX(o,refimage, vector,spacing,origin,direction)
+        return self
 
     def setImageFromNumpyZYX(self,nparray,refimage=None, vector=False,spacing=None,origin=None,direction=None):
         nda=sitk.GetImageFromArray(nparray, isVector=vector)
@@ -736,7 +739,8 @@ class Roiable(Imaginable):
         self.roiValue=1
 
     def changeImageSize(self,newSize,interpolator=sitk.sitkNearestNeighbor,bgvalue=0.0,useNearestNeighborExtrapolator=True):
-        return super().changeImageSize(newSize,interpolator,bgvalue,useNearestNeighborExtrapolator)
+        return super().changeImageSize(newSize,sitk.sitkNearestNeighbor,bgvalue,useNearestNeighborExtrapolator=True)
+
 
     # def __readImage__(self,f=None):
     #     if not f:

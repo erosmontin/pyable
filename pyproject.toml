@@ -1,11 +1,11 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling","SimpleITK", "numpy","matplotlib"]
 build-backend = "hatchling.build"
 
 
 [project]
 name = "pyable_eros_montin"
-version = "0.0.2"
+version = "0.0.3"
 authors = [
   { name="Dr. Eros Montin, PhD", email="eros.montin@gmail.com" },
 ]
