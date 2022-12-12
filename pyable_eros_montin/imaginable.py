@@ -153,10 +153,13 @@ class Imaginable:
         return self
 
     def isImageSet(self):
-        if self.getImage() is None:
+        try:
+            if self.getImage() is None:
+                return False
+            else:
+                return True
+        except:
             return False
-        else:
-            return True
 
     def setVerbose(self,v):
         self.verbose=v
@@ -849,14 +852,15 @@ if __name__=="__main__":
 
     # A.viewAxial()
     t=np.zeros((50,40,30))
-    t[:,10:20,10:30]=1
-    P=Imaginable()
+    saveNumpy(t,'/data/garbage/a.nii.gz')
+    # t[:,10:20,10:30]=1
+    # P=Imaginable()
     
-    P.setImageFromNumpyZYX(t,origin=[0,0,0],spacing=[1,1,1],direction=[1,0,0,0,1,0,0,0,1])
+    # P.setImageFromNumpyZYX(t,origin=[0,0,0],spacing=[1,1,1],direction=[1,0,0,0,1,0,0,0,1])
 
-    P.viewAxial()
-    ll=P.getImageAsNumpyXYZ()
+    # P.viewAxial()
+    # ll=P.getImageAsNumpyXYZ()
 
-    P.changeImageSize([z*4 for z in P.getImageSize()],bgvalue=0)
-    P.viewAxial()
-    P.writeImageAs('/data/tmp/a.nii.gz')
+    # P.changeImageSize([z*4 for z in P.getImageSize()],bgvalue=0)
+    # P.viewAxial()
+    # P.writeImageAs('/data/tmp/a.nii.gz')
