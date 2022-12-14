@@ -117,6 +117,8 @@ def setSITKImageInforFromImage(nda,ima):
 class Imaginable:
     def __init__(self,filename=None,image=None,verbose=False):
         self.verbose=verbose
+        self.dfltInterplator=sitk.sitkLinear
+        self.dfltuseNearestNeighborExtrapolator=False
         self.imageStack =pn.Stack()    
         self.log=pn.Log()
         self.settings={
@@ -236,8 +238,26 @@ class Imaginable:
     def getImageSpacing(self):
         image=self.getImage()
         return image.GetSpacing()
-    
-    def changeImageSpacing(self,spacing):
+
+    def changeImageSpacing(self,spacing,interpolator=None,useNearestNeighborExtrapolator=None,bgvalue=0.0):
+        if interpolator == None:
+            interpolator = self.dfltInterpolator
+        if useNearestNeighborExtrapolator ==None:
+            useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator
+
+        image=self.getImage()
+        d=self.getImageSpacing()
+        s=self.getImageSize()
+        newSize = [round((sz-1)*spc/s) for sz,spc,s in zip(image.GetSize(), image.GetSpacing(), spacing)]
+        t=sitk.Transform
+        t.SetIdentity()
+        mess=f'spacing changed from {d} to {spacing}'
+        self.setImage(sitk.Resample(image, newSize, t,  interpolator, self.getImageOrigin(), spacing, self.getImageDimension(), bgvalue,image.GetPixelIDValue(),useNearestNeighborExtrapolator),mess)
+
+        
+
+
+    def overrideImageSpacing(self,spacing):
         image=self.getImage()
         d=self.getImageSpacing()
         image.SetSpacing(spacing)
@@ -264,6 +284,10 @@ class Imaginable:
     def getImagePixelTypeAsString(self):
         image=self.getImage()
         return image.GetPixelIDValue(), image.GetPixelIDTypeAsString()
+
+    def getImagePixelTypeAsID(self):
+        image=self.getImage()
+        return image.GetPixelIDValue()
 
     def getImageSize(self,index=None):
         image=self.getImage()
@@ -334,7 +358,11 @@ class Imaginable:
         return image.TransformPhysicalPointToIndex(I)
 
         # return image.TransformPhysicalPointToContinuousIndex(I)
-    def changeImageSize(self,newSize,interpolator=sitk.sitkLinear,bgvalue=0.0,useNearestNeighborExtrapolator=False):
+    def changeImageSize(self,newSize,interpolator= None,bgvalue=0.0,useNearestNeighborExtrapolator=None):
+        if interpolator == None:
+            interpolator = self.dfltInterpolator
+        if useNearestNeighborExtrapolator ==None:
+            useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator
         
         image=self.getImage()
         dimension = image.GetDimension()
@@ -377,11 +405,13 @@ class Imaginable:
         m=f'image cropped to {PP} {lowerB} {upperB}'
         return self.setImage(cropped_image,m)
  
-    def __transformImage__(self,transform,interpolator = sitk.sitkLinear,reference_image=None ,default_value = 0,useNearestNeighborExtrapolator=False,fromregistration=False):
+    def __transformImage__(self,transform,interpolator = None,reference_image=None ,default_value = 0,useNearestNeighborExtrapolator=None,fromregistration=False):
     # Output image Origin, Spacing, Size, Direction are taken from the reference
     # image in this call to Resample
-        if not interpolator:
-            interpolator = sitk.sitkLinear
+        if interpolator == None:
+            interpolator = self.dfltInterpolator
+        if useNearestNeighborExtrapolator ==None:
+            useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator       
         if not default_value:
             default_value=0.0
         theT =sitk.Transform()
@@ -389,7 +419,6 @@ class Imaginable:
             for t in transform:
                 theT = sitk.CompositeTransform([theT,t])
             transform = theT
-
 
         if not reference_image:
             reference_image=self.getImage()
@@ -406,9 +435,13 @@ class Imaginable:
         translation = sitk.TranslationTransform(dimension, T)
         return self.setImage(self.__transformImage__(translation,interpolator,reference_image,default_value,useNearestNeighborExtrapolator),f"tranlated of {T}")
 
-    def scaleImage(self,S,center=None,centerindex=False,interpolator = sitk.sitkLinear,reference_image=None ,default_value = 0,useNearestNeighborExtrapolator=False):
+    def scaleImage(self,S,center=None,centerindex=False,interpolator = None,reference_image=None ,default_value = 0,useNearestNeighborExtrapolator=None):
         dimension=self.getImageDimension()
-        
+        if interpolator == None:
+            interpolator = self.dfltInterpolator
+        if useNearestNeighborExtrapolator ==None:
+            useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator
+
         if not center:
             center=self.getImageCenterCoordinate()
         else:
@@ -425,10 +458,18 @@ class Imaginable:
         transform.SetCenter(center)
         return self.setImage(self.__transformImage__(transform,interpolator,reference_image,default_value,useNearestNeighborExtrapolator),f"scaled of {theS}")
 
-    def transform(self,T,interpolator = sitk.sitkLinear,reference_image=None ,default_value = 0,useNearestNeighborExtrapolator=False):
+    def transform(self,T,interpolator = None,reference_image=None ,default_value = 0,useNearestNeighborExtrapolator=None):
+        if interpolator == None:
+            interpolator = self.dfltInterpolator
+        if useNearestNeighborExtrapolator ==None:
+            useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator
         return self.setImage(self.__transformImage__(T,interpolator,reference_image,default_value,useNearestNeighborExtrapolator),f"tranlated of {T}")
 
-    def transformImageAffine(self,A,center,centerindex=False,interpolator = sitk.sitkLinear,reference_image=None ,default_value = 0.0,useNearestNeighborExtrapolator=False):
+    def transformImageAffine(self,A,center,centerindex=False,interpolator = None,reference_image=None ,default_value = 0.0,useNearestNeighborExtrapolator=None):
+        if interpolator == None:
+            interpolator = self.dfltInterpolator
+        if useNearestNeighborExtrapolator ==None:
+            useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator
         dimension=self.getImageDimension()
         
         if not center:
@@ -450,7 +491,8 @@ class Imaginable:
     def getImageCenterCoordinate(self):
         return self.getCoordinatesFromIndex(self.getImageCenterIndex())
 
-    def rotateImage(self,rotation,center=None, centerindex=False,translation=None,interpolator = sitk.sitkLinear,reference_image=None ,default_value = 0.0,useNearestNeighborExtrapolator=False):
+    def rotateImage(self,rotation,center=None, centerindex=False,translation=None,interpolator = None,reference_image=None ,default_value = 0.0,useNearestNeighborExtrapolator=None):
+
         """
         This function rotates an image across each of the x, y, z axes by theta_x, theta_y, and theta_z degrees
         respectively and resamples it to be isotropic.
@@ -461,7 +503,13 @@ class Imaginable:
         :translation: mm of translation 
 
         :return: The rotated image
+        
         """
+
+        if interpolator == None:
+            interpolator = self.dfltInterpolator
+        if useNearestNeighborExtrapolator ==None:
+            useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator
         if not center:
             center=[int(x) for x in self.getImageCenterCoordinate()]
         else:
@@ -523,7 +571,7 @@ class Imaginable:
         w="Image"
         if not isinstance(toadd,numbers.Number):
             w=str(toadd)
-        return self.__filterSelfAndImage__(sitk.MultiplyImageFilter(),toadd,f'multiply {w}')
+        return self.__filterSelfAndImageMat__(sitk.MultiplyImageFilter(),toadd,f'multiply {w}')
 
 
 
@@ -535,9 +583,10 @@ class Imaginable:
 
     def divide(self, toadd):
         w="Image"
+
         if not isinstance(toadd,numbers.Number):
             w=str(toadd)
-        return self.__filterSelfAndImage__(sitk.DivideImageFilter(),toadd,f'divide {w}')
+        return self.__filterSelfAndImageMat__(sitk.DivideImageFilter(),toadd,f'divide {w}')
 
 
     def __filterSelfAndImage__(self,filter,toadd,message):
@@ -546,7 +595,7 @@ class Imaginable:
             L=SITKImaginable(image=sitkimage)
             L.resampleOnTargetImage(self.getImage())
             toadd=L.getImage()
-            w=str(toadd)
+            
         else:
             toadd=float(toadd)
         try:
@@ -555,6 +604,30 @@ class Imaginable:
             raise Exception("Can't {message}")
         return self
 
+    def __filterSelfAndImageMat__(self,filter,toadd,message):
+        #get original pixel id
+        S=self.getDuplicate()
+        O=self.getImagePixelTypeAsID()
+        # cast to float
+        S.changePixelType(sitk.sitkFloat32)
+
+        if not isinstance(toadd,numbers.Number):
+            sitkimage=getmeTheSimpleITKImage(toadd)
+            L=SITKImaginable(image=sitkimage)
+            L.resampleOnTargetImage(self.getImage())
+            L.changePixelType(sitk.sitkFloat32)
+            toadd=L.getImage()
+            
+        else:
+            toadd=float(toadd)
+        try:
+            OUT=filter.Execute(S.getImage(),toadd)
+            S.setImage(OUT)
+            S.changePixelType(O)
+            self.setImage(S.getImage(),message)
+        except:
+            raise Exception("Can't {message}")
+        return self
     
     
     def isInsidePoint(self,P):
@@ -740,12 +813,10 @@ class Roiable(Imaginable):
     def __init__(self, filename=None, image=None, verbose=False):
         super().__init__(filename, image, verbose)
         self.roiValue=1
+        self.dfltInterpolator=sitk.sitkNearestNeighbor
+        self.dfltuseNearestNeighborExtrapolator=True
 
-    def changeImageSize(self,newSize,interpolator=sitk.sitkNearestNeighbor,bgvalue=0.0,useNearestNeighborExtrapolator=True):
-        return super().changeImageSize(newSize,sitk.sitkNearestNeighbor,bgvalue,useNearestNeighborExtrapolator=True)
-
-
-    # def __readImage__(self,f=None):
+     # def __readImage__(self,f=None):ls di     
     #     if not f:
     #         f=self.getInputFileName()
     #     return sitk.ReadImage(f,sitk.sitkUInt8)
@@ -776,13 +847,9 @@ class Roiable(Imaginable):
         self.setImage(o,'erode')
         return self
 
-    def __transformImage__(self, transform, interpolator=sitk.sitkLinear, reference_image=None, default_value=0, useNearestNeighborExtrapolator=True,fromregistration=False):
-        return super().__transformImage__(transform, interpolator, reference_image, default_value, useNearestNeighborExtrapolator,fromregistration=fromregistration)
-
-    def transformFromRegitration(self,T,interpolator = sitk.sitkNearestNeighbor,reference_image=None ,default_value = 0,useNearestNeighborExtrapolator=True):
-        return self.setImage(self.__transformImage__(T,interpolator,reference_image,default_value,useNearestNeighborExtrapolator,fromregistration=True),f"tranlated of {T}")
-    def toVtk(self):
-        return sitk2vtk(self.getImage(), debugOn=False)
+  
+#     def toVtk(self):
+#         return sitk2vtk(self.getImage(), debugOn=False)
 if __name__=="__main__":
 
     # PT=pn.Pathable('/data/MYDATA/3T vs 7T/registration_test')
@@ -851,8 +918,8 @@ if __name__=="__main__":
     # A.whathappened()
 
     # A.viewAxial()
-    t=np.zeros((50,40,30))
-    saveNumpy(t,'/data/garbage/a.nii.gz')
+    # t=np.zeros((50,40,30))
+    # saveNumpy(t,'/data/garbage/a.nii.gz')
     # t[:,10:20,10:30]=1
     # P=Imaginable()
     
@@ -864,3 +931,10 @@ if __name__=="__main__":
     # P.changeImageSize([z*4 for z in P.getImageSize()],bgvalue=0)
     # P.viewAxial()
     # P.writeImageAs('/data/tmp/a.nii.gz')
+
+
+    t=np.array([[20,10,20],[20,10,20]])
+    P=Imaginable()
+    P.setImageFromNumpy(t)
+    P.divide(20)
+    P.viewAxial()
