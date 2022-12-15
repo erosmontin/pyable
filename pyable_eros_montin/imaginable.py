@@ -117,7 +117,7 @@ def setSITKImageInforFromImage(nda,ima):
 class Imaginable:
     def __init__(self,filename=None,image=None,verbose=False):
         self.verbose=verbose
-        self.dfltInterplator=sitk.sitkLinear
+        self.dfltInterpolator=sitk.sitkLinear
         self.dfltuseNearestNeighborExtrapolator=False
         self.imageStack =pn.Stack()    
         self.log=pn.Log()
@@ -249,15 +249,16 @@ class Imaginable:
         d=self.getImageSpacing()
         s=self.getImageSize()
         newSize = [round((sz-1)*spc/s) for sz,spc,s in zip(image.GetSize(), image.GetSpacing(), spacing)]
-        t=sitk.Transform
+        t=sitk.Transform()
         t.SetIdentity()
         mess=f'spacing changed from {d} to {spacing}'
-        self.setImage(sitk.Resample(image, newSize, t,  interpolator, self.getImageOrigin(), spacing, self.getImageDimension(), bgvalue,image.GetPixelIDValue(),useNearestNeighborExtrapolator),mess)
-
+        
+        self.setImage(sitk.Resample(image, newSize, t,  interpolator, self.getImageOrigin(), spacing, self.getImageDirection(), bgvalue,image.GetPixelIDValue(),useNearestNeighborExtrapolator),mess)
+        return self
         
 
 
-    def overrideImageSpacing(self,spacing):
+    def setImageSpacing(self,spacing):
         image=self.getImage()
         d=self.getImageSpacing()
         image.SetSpacing(spacing)
@@ -267,7 +268,7 @@ class Imaginable:
         image=self.getImage()
         return image.GetOrigin()
     
-    def changeImageOrigin(self,o):
+    def setImageOrigin(self,o):
         image=self.getImage()
         d=self.getImageOrigin()
         image.SetOrigin(o)
@@ -934,7 +935,9 @@ if __name__=="__main__":
 
 
     t=np.array([[20,10,20],[20,10,20]])
-    P=Imaginable()
+    P=Roiable()
     P.setImageFromNumpy(t)
+    P.setImageSpacing([4,4,8])
     P.divide(20)
     P.viewAxial()
+    P.changeImageSpacing([1,1,1])
