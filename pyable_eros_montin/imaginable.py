@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 
 
+
 def saveNumpy(x,fn,ref=None):
     T=Imaginable()
     T.setImageFromNumpy(x,refimage=ref)
@@ -212,6 +213,18 @@ class Imaginable:
         o=np.transpose(self.getImageAsNumpyZYX(), L)
         return o
 
+    def resampleOnCanonicalSpace(self,interpolator=None,useNearestNeighborExtrapolator=None,bgvalue=0.0):
+        if interpolator == None:
+            interpolator = self.dfltInterpolator
+        if useNearestNeighborExtrapolator ==None:
+            useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator
+
+        
+        t=sitk.Transform()
+        t.SetIdentity()
+        mess='to canonical'
+        self.setImage(sitk.Resample(self.getImage(), self.getImageSize(), t,  interpolator, self.getImageOrigin(), self.getImageSpacing(), np.eye(3).flatten(), bgvalue,self.getImagePixelTypeAsID(),useNearestNeighborExtrapolator),mess)
+
     def setImageFromNumpy(self,nparray,refimage=None, vector=False,spacing=None,origin=None,direction=None):
         L=list(range(len(nparray.shape)))
         L.reverse()
@@ -255,7 +268,21 @@ class Imaginable:
         
         self.setImage(sitk.Resample(image, newSize, t,  interpolator, self.getImageOrigin(), spacing, self.getImageDirection(), bgvalue,image.GetPixelIDValue(),useNearestNeighborExtrapolator),mess)
         return self
-        
+    
+    def changeImageDirection(self,direction,interpolator=None,useNearestNeighborExtrapolator=None,bgvalue=0.0):
+        raise Exception("not yet implemented we are working on it")
+        # if interpolator == None:
+        #     interpolator = self.dfltInterpolator
+        # if useNearestNeighborExtrapolator ==None:
+        #     useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator
+
+        # image=self.getImage()
+        # d=self.getImageDirection()
+        # t=sitk.Transform()
+        # t.SetIdentity()
+        # mess=f'direcion changed from {d} to {direction}'
+        # self.setImage(sitk.Resample(image, self.getImageSize(), t,  interpolator, self.getImageOrigin(), self.getImageSpacing(),direction, bgvalue,image.GetPixelIDValue(),useNearestNeighborExtrapolator),mess)
+        # return self
 
 
     def setImageSpacing(self,spacing):
@@ -297,7 +324,7 @@ class Imaginable:
             S=S[index]
         return S
 
-        return 
+         
     
     def getVoxelVolume(self):
         """get the volume of a voxel in the imaginable
@@ -341,8 +368,12 @@ class Imaginable:
     def __del__(self):
         self.__tellme__("I'm being automatically destroyed. Goodbye!",'destroy xxx999')
 
-    def getDuplicate(self):
+    def forkDuplicate(self):  
         return copy.deepcopy(self)
+    def getDuplicate(self):
+        PP=self.__class__()
+        PP.setImage(self.getImage())
+        return PP
 
     
     def resampleOnTargetImage(self,target,message=None):
@@ -848,7 +879,15 @@ class Roiable(Imaginable):
         self.setImage(o,'erode')
         return self
 
-  
+
+
+
+
+
+
+
+
+
 #     def toVtk(self):
 #         return sitk2vtk(self.getImage(), debugOn=False)
 if __name__=="__main__":
@@ -934,10 +973,22 @@ if __name__=="__main__":
     # P.writeImageAs('/data/tmp/a.nii.gz')
 
 
-    t=np.array([[20,10,20],[20,10,20]])
-    P=Roiable()
-    P.setImageFromNumpy(t)
-    P.setImageSpacing([4,4,8])
-    P.divide(20)
-    P.viewAxial()
-    P.changeImageSpacing([1,1,1])
+    # t=np.array([[20,10,20],[20,10,20]])
+    # P=Roiable()
+    # P.setImageFromNumpy(t)
+    # P.setImageSpacing([4,4,8])
+    # P.divide(20)
+    # P.viewAxial()
+    # P.changeImageSpacing([1,1,1])
+
+
+    # I=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p02.nii.gz')
+    # print(I.getImageDirection())
+    
+    # I.resampleOnCanonicalSpace()
+
+    # print(I.getImageDirection())
+    # I.writeImageAs('/g/2.nii.gz')
+    I=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p03.nii.gz')
+    P=I.getDuplicate()
+    
