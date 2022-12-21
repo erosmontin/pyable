@@ -235,7 +235,11 @@ class Imaginable:
     def setImageFromNumpyZYX(self,nparray,refimage=None, vector=False,spacing=None,origin=None,direction=None):
         nda=sitk.GetImageFromArray(nparray, isVector=vector)
         if refimage:
-            nda.CopyInformation(getmeTheSimpleITKImage(refimage))
+            REF=getmeTheSimpleITKImage(refimage)
+            if np.array_equiv(REF.GetSize(),nparray.shape):
+                nda.CopyInformation(REF)
+            else:
+                nda=setSITKImageInforFromImage(nda,REF)
         elif ((spacing) and (origin) and (direction) ):
             nda=setSITKImageInfo(nda,spacing=spacing,origin=origin,direction=direction)
         elif self.isImageSet():
@@ -250,7 +254,6 @@ class Imaginable:
     
     def setImageDirection(self,direction):
         image=self.getImage()
-        image=sitk.Image()
         self.setImage(image.SetDirection(direction))
         return self
 
