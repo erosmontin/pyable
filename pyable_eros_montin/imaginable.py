@@ -91,12 +91,12 @@ class IndexViewer(object):
 
 
 def getmeTheSimpleITKImage(x):
-    if(isinstance(x,sitk.Image)):
+    if(issubclass(type(x),sitk.Image)):
         return x
-    elif (isinstance(x,SITKImaginable)):
+    elif (issubclass(type(x),Imaginable)):
         return x.getImage()
     elif (isinstance(x,str)):
-        return SITKImaginable(filename=x).getImage()
+        return Imaginable(filename=x).getImage()
     else:
         raise Exception("I don't know this image tyoe!!! what shuld i do?? ask Eros eros.montin@gmail.com")
 def setSITKImageInfo(nda,spacing,origin,direction):
@@ -248,6 +248,12 @@ class Imaginable:
         image=self.getImage()
         return image.GetDirection()
     
+    def setImageDirection(self,direction):
+        image=self.getImage()
+        image=sitk.Image()
+        self.setImage(image.SetDirection(direction))
+        return self
+
     def getImageSpacing(self):
         image=self.getImage()
         return image.GetSpacing()
@@ -973,14 +979,14 @@ if __name__=="__main__":
     # P.writeImageAs('/data/tmp/a.nii.gz')
 
 
-    # t=np.array([[20,10,20],[20,10,20]])
-    # P=Roiable()
-    # P.setImageFromNumpy(t)
-    # P.setImageSpacing([4,4,8])
-    # P.divide(20)
-    # P.viewAxial()
-    # P.changeImageSpacing([1,1,1])
-
+    t=np.array([[20,10,20],[20,10,20]])
+    P=Roiable()
+    P.setImageFromNumpy(t)
+    P.setImageSpacing([4,4,8])
+    
+    t=np.array([[20,10,20],[20,10,4]])/2
+    V=Imaginable()
+    V.setImageFromNumpy(t,P)
 
     # I=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p02.nii.gz')
     # print(I.getImageDirection())
@@ -989,6 +995,6 @@ if __name__=="__main__":
 
     # print(I.getImageDirection())
     # I.writeImageAs('/g/2.nii.gz')
-    I=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p03.nii.gz')
-    P=I.getDuplicate()
+    # I=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p03.nii.gz')
+    # P=I.getDuplicate()
     
