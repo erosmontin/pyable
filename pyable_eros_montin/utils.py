@@ -74,36 +74,37 @@ def saveSliceToImage(I,axis,index,fn,spacing=None):
     f=getImaginableSlice(I,axis=axis,index=index)
     matplotlib.image.imsave(fn, f,vmin=0.2,vmax=1,cmap='jet'  )
 
+import pywt
+def wlt(x=None,wtype='Haar'):
+    return pywt.dwtn(x, wtype)
 
-if __name__=="__main__":
+# if __name__=="__main__":
 
-    # P=pn.Pathable('/g/a/f.nii.gz')
-    # for p in P.getFilesInPathByExtension():
-    #     I=Imaginable(filename=p)
-    #     l=pn.Pathable(p)
-    #     l.changeExtension('png')
-    #     l.appendPath('f')
-    #     l.ensureDirectoryExistence()
-    #     for c,v in zip(range(3),[40,80,30]):
-    #         l.addPrefix(f'{c}_')
-    #         if not l.exists():
-    #             saveSliceToImage(I,axis=c,index=v,fn=l.getPosition())
-    #         l.undo()
+#     # P=pn.Pathable('/g/a/f.nii.gz')
+#     # for p in P.getFilesInPathByExtension():
+#     #     I=Imaginable(filename=p)
+#     #     l=pn.Pathable(p)
+#     #     l.changeExtension('png')
+#     #     l.appendPath('f')
+#     #     l.ensureDirectoryExistence()
+#     #     for c,v in zip(range(3),[40,80,30]):
+#     #         l.addPrefix(f'{c}_')
+#     #         if not l.exists():
+#     #             saveSliceToImage(I,axis=c,index=v,fn=l.getPosition())
+#     #         l.undo()
         
 
 
    
 
-    NEW=np.array([-0.9993099234645667, -6.385608658999428e-08, -0.037144005107034125, 1.898319864628949e-05, -0.9999998702797991, -0.0005089990447097432, -0.03714399688886282, -0.0005093529042066276, 0.9993097937099291]).reshape((3,3))
-    ORIGINAL=np.eye(3)
+#     # NEW=np.array([-0.9993099234645667, -6.385608658999428e-08, -0.037144005107034125, 1.898319864628949e-05, -0.9999998702797991, -0.0005089990447097432, -0.03714399688886282, -0.0005093529042066276, 0.9993097937099291]).reshape((3,3))
+#     # ORIGINAL=np.eye(3)
 
-    n=10
-    t=np.array([[0],[0],[0]])
-    A = np.random.rand(3, n)
-    B = NEW@A + t
+#     # n=10
+#     # t=np.array([[0],[0],[0]])
+#     # A = np.random.rand(3, n)
+#     # B = NEW@A + t
 
-    ret_R, ret_t = rigid_transform_3D(A, B)
-    print(ret_R)
-    print(ret_t)
-
-
+#     # ret_R, ret_t = rigid_transform_3D(A, B)
+#     # print(ret_R)
+#     # print(ret_t)

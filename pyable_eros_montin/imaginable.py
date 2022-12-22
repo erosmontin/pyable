@@ -9,12 +9,15 @@ import matplotlib.pyplot as plt
 
 
 
-
-def saveNumpy(x,fn,ref=None):
+def numpyToImaginable(x,ref=None):
     T=Imaginable()
     T.setImageFromNumpy(x,refimage=ref)
-    T.writeImageAs(fn)
+    return T
 
+
+def saveNumpy(x,fn,ref=None):
+    T=numpyToImaginable(x,ref)
+    T.writeImageAs(fn)
 def getTransformFromFile(h):
     if not pn.isCollection(h):
         h=[h]
@@ -99,21 +102,39 @@ def getmeTheSimpleITKImage(x):
         return Imaginable(filename=x).getImage()
     else:
         raise Exception("I don't know this image tyoe!!! what shuld i do?? ask Eros eros.montin@gmail.com")
+def copythethreeinfosonandsetthemtimage(source,reference):
+    sp,o,d=getSITKImageInfo(reference)
+    return setSITKImageInfo(source,sp,o,d)
+
+
+def setSITKImageInforFromImage(nda,ima):
+    # ORSP=nda.GetSpacing()
+    REF=getmeTheSimpleITKImage(ima)
+    nda=copythethreeinfosonandsetthemtimage(nda,REF)
+    #if the resolution is identical no prob otherwise we need to fix the poition of the origin
+    # if not np.array_equiv(ORSP,REF.GetSpacing()):
+    #     nda=fixOriginOnResamping(nda,ima)
+    return nda
+
+
+
 def setSITKImageInfo(nda,spacing,origin,direction):
     if spacing:
+        osp=nda.GetSpacing()
+        Onda=copy.deepcopy(nda)
         nda.SetSpacing(spacing)
-    if origin:
-        nda.SetOrigin(origin)
     if direction:
         nda.SetDirection(direction)
+    if origin:
+        nda.SetOrigin(origin)
+        # if np.array_equiv(spacing,osp):
+        #     nda=fixOriginOnResamping(nda,Onda)
     return nda
 def getSITKImageInfo(nda):
     return nda.GetSpacing(),nda.GetOrigin(), nda.GetDirection()
 
-def setSITKImageInforFromImage(nda,ima):
-    return nda.CopyInformation(getmeTheSimpleITKImage(ima))
 
-
+import utils
 
 class Imaginable:
     def __init__(self,filename=None,image=None,verbose=False):
@@ -137,7 +158,23 @@ class Imaginable:
                 self.InputFileName=pn.createRandomTemporaryPathableFromFileName('a.nii.gz').getPosition()
 
         
-
+    def getWavelet(self,wtype='Haar'):
+        WT=utils.wlt(self.getImageAsNumpy(),wtype)
+        NS=[g*2 for g in self.getImageSpacing()]
+        O=[]
+        #this seems to be an offset at least for haar
+        Z=[0]*self.getImageDimension()
+        U=[0]*self.getImageDimension()
+        T=[(o-z)/2 for z,o in zip(self.getCoordinatesFromIndex(Z),self.getCoordinatesFromIndex(U))]
+        for t in WT.keys():
+            K=numpyToImaginable(WT[t],self)
+            K.setImageSpacing(NS)
+            K.translateImage(T)
+            O.append({"type":type(self),
+                    "name":t,
+                    "map":K.getDuplicate()
+            })
+        return O
     def getImage(self):
         return self.imageStack.peek()
 
@@ -338,7 +375,7 @@ class Imaginable:
     def getVoxelVolume(self):
         """get the volume of a voxel in the imaginable
 
-        Returns:
+        Returns:/discover
             float: voxel volume
         """        
         # image=self.getImage()
@@ -982,14 +1019,22 @@ if __name__=="__main__":
     # P.writeImageAs('/data/tmp/a.nii.gz')
 
 
-    t=np.array([[20,10,20],[20,10,20]])
-    P=Roiable()
-    P.setImageFromNumpy(t)
-    P.setImageSpacing([4,4,8])
+    # t=np.array([[20,10,20],[20,10,20]])
+    # P=Roiable()
+    # P.setImageFromNumpy(t)
+    # P.setImageSpacing([4,4,8])
     
-    t=np.array([[20,10,20],[20,10,4]])/2
-    V=Imaginable()
-    V.setImageFromNumpy(t,P)
+    # t=np.array([[20,10,20],[20,10,4]])/2
+    # V=Imaginable()
+    # V.setImageFromNumpy(t,P)
+    # V.changeImageSpacing([0.5,0.5,0.5])
+
+    V=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p02.nii.gz')
+
+    J=V.getWavelet()
+    J[1]["map"].writeImageAs('/g/a.nii.gz')
+
+
 
     # I=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p02.nii.gz')
     # print(I.getImageDirection())
