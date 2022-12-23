@@ -7,10 +7,11 @@ My collection of image and mesh functions
 # versions:
 - 0.0.3 current version
 - 0.0.4 pre release
-    - updated the concept of change and override
+    - updated the concept of change and set
     - dflt interpolation and deflt usenearest..
     - divide and multiply are casted to float and then cast back to their original pixeltype
     - getWavelets
+    - left and right functions for HF (tested with Rview)
     - WIP rigid_transform_3D resampleoncanonicalDirections() using [this git repo](https://github.com/nghiaho12/rigid_transform_3D/blob/master/test_rigid_transform_3D.py)
     
 [*Dr. Eros Montin, PhD*](http://me.biodimensional.com)
