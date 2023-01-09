@@ -1,12 +1,10 @@
-
 import numbers
-from re import T
 from pynico_eros_montin import pynico as pn
 import SimpleITK as sitk
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
-from utils import wlt as uwlt
+from pyable_eros_montin.utils import wlt as uwlt
 
 
 def transform_point(P,transform):
@@ -584,7 +582,7 @@ class Imaginable:
         transform = sitk.AffineTransform(dimension)
         transform.SetMatrix(A)
         transform.SetCenter(center)
-        return self.setImage(self.__transformImage__(transform,interpolator,reference_image,default_value),f"scaled of {S}")
+        return self.setImage(self.__transformImage__(transform,interpolator,reference_image,default_value),f"scaled of {A}")
 
    
    

@@ -1,4 +1,4 @@
-from imaginable import *
+from pyable_eros_montin import imaginable
 
 
 import numpy as np
