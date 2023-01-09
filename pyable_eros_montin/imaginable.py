@@ -8,6 +8,29 @@ import copy
 import matplotlib.pyplot as plt
 
 
+def transform_point(P,transform):
+    return transform.TransformPoint(P)
+
+
+def getMatrixToPatientOrientationHF(L):
+    #input is an imaginable
+    
+    transform=sitk.AffineTransform(L.getImageDimension())
+    transform.SetMatrix(L.getImageDirection())
+    O0= transform_point([0]*L.getImageDimension(),transform)
+    O1= transform_point(L.getImageSize(),transform)
+    
+    
+    L=[['Left','Right'],['Anterior','Posterior'],['Down','Up']]
+    if O0[0]<O1[0]:
+        L[0].reverse()   
+    if O0[1]>O1[1]:
+        L[1].reverse()   
+    if O0[2]>O1[2]:
+        L[2].reverse()   
+    return L
+
+
 
 def numpyToImaginable(x,ref=None):
     T=Imaginable()
@@ -291,7 +314,8 @@ class Imaginable:
     
     def setImageDirection(self,direction):
         image=self.getImage()
-        self.setImage(image.SetDirection(direction))
+        image.SetDirection(direction)
+        self.setImage(image)
         return self
 
     def getImageSpacing(self):
