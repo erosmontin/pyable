@@ -6,6 +6,7 @@ import SimpleITK as sitk
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
+from utils import wlt as uwlt
 
 
 def transform_point(P,transform):
@@ -157,7 +158,7 @@ def getSITKImageInfo(nda):
     return nda.GetSpacing(),nda.GetOrigin(), nda.GetDirection()
 
 
-import utils
+
 
 class Imaginable:
     def __init__(self,filename=None,image=None,verbose=False):
@@ -180,9 +181,9 @@ class Imaginable:
             if not self.getInputFileName():
                 self.InputFileName=pn.createRandomTemporaryPathableFromFileName('a.nii.gz').getPosition()
 
-        
+
     def getWavelet(self,wtype='Haar'):
-        WT=utils.wlt(self.getImageAsNumpy(),wtype)
+        WT=uwlt(self.getImageAsNumpy(),wtype)
         NS=[g*2 for g in self.getImageSpacing()]
         O=[]
         #this seems to be an offset at least for haar
