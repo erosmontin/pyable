@@ -650,6 +650,13 @@ class Imaginable:
 
     def applyAbs(self):
         m=self.getImage()
+        ABS=sitk.AbsImageFilter()
+        self.setImage(ABS.Execute(m))
+        return self
+
+
+    def applyModulus(self):
+        m=self.getImage()
         try:
             ABS=sitk.ComplexToModulusImageFilter()
             self.setImage(ABS.Execute(m))
