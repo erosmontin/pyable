@@ -61,7 +61,7 @@ def getImaginableSlice(I,axis,index):
     elif axis==2:
         slicer=I.getSliceNormalK
         # self.ratio=k[1]/k[0]
-    o=Imaginable(image=slicer(index)).getImageAsNumpy()
+    o=imaginable(image=slicer(index)).getImageAsNumpy()
     return o
 
 
@@ -77,6 +77,9 @@ def saveSliceToImage(I,axis,index,fn,spacing=None):
 import pywt
 def wlt(x=None,wtype='Haar'):
     return pywt.dwtn(x, wtype)
+
+
+
 
 # if __name__=="__main__":
 

@@ -4,7 +4,12 @@ import SimpleITK as sitk
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
-from pyable_eros_montin.utils import wlt as uwlt
+
+try:
+    from .utils import wlt as uwlt
+except:
+    from utils import wlt as uwlt
+from skimage import data, filters, measure, morphology
 
 
 def transform_point(P,transform):
@@ -180,6 +185,8 @@ class Imaginable:
                 self.InputFileName=pn.createRandomTemporaryPathableFromFileName('a.nii.gz').getPosition()
 
 
+        
+
     def getWavelet(self,wtype='Haar'):
         WT=uwlt(self.getImageAsNumpy(),wtype)
         NS=[g*2 for g in self.getImageSpacing()]
@@ -248,6 +255,7 @@ class Imaginable:
     
     def writeImageAs(self,filename,force=True):
         if ((not pn.Pathable(filename).exists()) or (force)):
+            pn.Pathable(filename).ensureDirectoryExistence()
             try:
                 sitk.WriteImage(self.getImage(), filename)
                 return filename
@@ -445,9 +453,17 @@ class Imaginable:
         return PP
 
     
-    def resampleOnTargetImage(self,target,message=None):
+    def resampleOnTargetImage(self,target,interpolator = None,default_value = 0,useNearestNeighborExtrapolator=None):
         target=getmeTheSimpleITKImage(target)
-        self.setImage(sitk.Resample(self.getImage(),target),'resampled on target image')
+        if interpolator == None:
+            interpolator = self.dfltInterpolator
+        if useNearestNeighborExtrapolator ==None:
+            useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator       
+        if not default_value:
+            default_value=0.0
+        theT =sitk.Transform()
+        theT.SetIdentity()
+        self.setImage(sitk.Resample(self.getImage(),target,theT,interpolator,default_value,sitk.sitkUnknown,useNearestNeighborExtrapolator),'resampled on target image')
     
 
     def getCoordinatesFromIndex(self,P):
@@ -763,8 +779,11 @@ class Imaginable:
 
         return O
     
-    def getImageUniqueValues(self):
-        return np.unique(self.getImageAsNumpyZYX().flatten())
+    def getImageUniqueValues(self,exclude=[]):
+        O=set(np.unique(self.getImageAsNumpy().flatten()))
+        for e in exclude:
+            O.discard(e)
+        return O
 
     def getMaximumValue(self):
         image=self.getImage()
@@ -812,6 +831,28 @@ class Imaginable:
         Extractor.SetSize(size)
         Extractor.SetIndex(index)
         return Extractor.Execute(self.getImage())
+
+    def instantiateAnotherAble(self):
+        able = self.__class__
+        return able()
+
+    def getSliceNormalKAsNumpy(self,slice):
+        O=self.instantiateAnotherAble()
+        out=self.getSliceNormalK(slice)
+        O.setImage(out)
+        return O.getImageAsNumpy()
+
+    def getSliceNormalJAsNumpy(self,slice):
+        O=self.instantiateAnotherAble()
+        out=self.getSliceNormalJ(slice)
+        O.setImage(out)
+        return O.getImageAsNumpy()
+
+    def getSliceNormalIAsNumpy(self,slice):
+        O=self.instantiateAnotherAble()
+        out=self.getSliceNormalI(slice)
+        O.setImage(out)
+        return O.getImageAsNumpy()
 
     def getSliceNormalK(self,slice):
         slice = int(slice)
@@ -906,6 +947,17 @@ class Imaginable:
 
     def transformFromRegitration(self,T,interpolator = sitk.sitkLinear,reference_image=None ,default_value = 0,useNearestNeighborExtrapolator=False):
         return self.setImage(self.__transformImage__(T,interpolator,reference_image,default_value,useNearestNeighborExtrapolator,fromregistration=True),f"transformed of {T}")
+    
+    # def mask(self,mask):
+    #     mask=getmeTheSimpleITKImage(mask)
+        
+    #     self.setImage(,'masked with image')
+
+
+def maskSITKImage(r,maskingvalue=1,foreground=1,outsidevalue=0):
+    return sitk.Mask(r, sitk.Cast(foreground,sitk.sitkInt16), maskingValue=maskingvalue, outsideValue=outsidevalue)
+
+
 
 
 def getDirectiontransform(image):
@@ -918,33 +970,44 @@ class SITKImaginable(Imaginable):
     pass
 
 class Roiable(Imaginable):
-    def __init__(self, filename=None, image=None, verbose=False):
+    """
+    A class For Region of Interest
+    if you have more than a label in your ROI, use Labelmapable
+    ROI can have a value but when getimage is called the output has 1 for region in ROI and 0 for outside
+    
+    """
+
+    def __init__(self, filename=None, image=None, verbose=False,roivalue=None):
+        """
+        filename : str
+            the filename of the ROI
+        image : sitk.image
+            the simple itk image that sotres the roi
+        roivalue : int
+            roi value
+        """
         super().__init__(filename, image, verbose)
-        self.roiValue=1
         self.dfltInterpolator=sitk.sitkNearestNeighbor
         self.dfltuseNearestNeighborExtrapolator=True
+        if roivalue:
+            self.setImage(self.getImage()==roivalue,'now the mask is rqual to one')
 
-     # def __readImage__(self,f=None):ls di     
-    #     if not f:
-    #         f=self.getInputFileName()
-    #     return sitk.ReadImage(f,sitk.sitkUInt8)
-    def getLabelMapRegionCenterIndex(self):
+    def getCenterIndex(self):
         label_statistic = sitk.LabelIntensityStatisticsImageFilter()
-        t=self.getDuplicate()
-        label_statistic.Execute()
+        label_statistic.Execute(self.getImage())
         center_gravity = label_statistic.GetCenterGravity(1)
         return center_gravity
-    def  getLabelMapRegionCenterCoordinate(self):
-        center_gravity_coordinate = self.getCoordinatesFromIndex(self.getLabelMapRegionCenterIndex())
+    
+    def  getCenterCoordinates(self):
+        center_gravity_coordinate = self.getCoordinatesFromIndex(self.getCenterIndex())
         return center_gravity_coordinate
-
 
     def dilateRadius(self,radius=2):
         return self.__derodeRadius__(radius,False)
     def erodeRadius(self,radius=2):
         return self.__derodeRadius__(radius)
     def __derodeRadius__(self,radius=2,erode=True):
-        image=self.getImage()
+        image=self.getMask()
 
         if erode:
             filter = sitk.BinaryErodeImageFilter()
@@ -954,6 +1017,77 @@ class Roiable(Imaginable):
         o=filter.Execute(image>0)
         self.setImage(o,'erode')
         return self
+    
+    def removeSmallObj(self,voxel_threshold=50,connectivity=26):
+        mask =measure.label(self.getImageAsNumpy())
+        mask = morphology.remove_small_objects(mask, voxel_threshold,connectivity=connectivity)
+        mask[np.where(mask==1)]=self.roiValue
+        self.setImageFromNumpy(mask)
+        return self
+
+    def removeHoles(self,voxel_threshold=50,connectivity=26):
+        mask =measure.label(self.getImageAsNumpy())
+        mask = morphology.remove_small_holes(mask, voxel_threshold,connectivity=connectivity)
+        mask[np.where(mask==1)]=self.roiValue
+        self.setImageFromNumpy(mask)
+        return self
+    def keepBiggestObj(self,connectivity=26):
+        labelled = measure.label(self.getImageAsNumpy())
+        rp = measure.regionprops(labelled)
+        # get size of largest cluster
+        size = max([i.area for i in rp])
+        # remove everything smaller than largest
+        out = morphology.remove_small_objects(labelled, min_size=size-1,connectivity=connectivity)
+        out[np.where(out==1)]=self.roiValue
+        self.setImageFromNumpy(out)
+        return self
+
+
+class LabelMapable(Imaginable):
+    def __init__(self, filename=None, image=None, verbose=False,labelsvalues=None):
+        super().__init__(filename, image, verbose)
+        self.labelsvalues=labelsvalues
+        self.ROIS=[]
+        if self.labelsvalues is None:
+            self.labelsvalues=self.getImageUniqueValues(exclude=[0])
+
+        for v in self.labelsvalues:
+            self.ROIS.append(Roiable(filename,image,verbose,roivalue=v))
+        
+
+    def removeSmallObj(self,voxel_threshold=50,connectivity=26):
+        for r in self.ROIS:
+            r.removeSmallObj(voxel_threshold,connectivity)
+        self.mergeLabels()
+        return self
+
+    def removeHoles(self,voxel_threshold=50,connectivity=26):
+        for r in self.ROIS:
+            r.removeHoles(voxel_threshold,connectivity)
+        # self.mergeLabels()
+        return self
+    def keepBiggestObj(self,connectivity=26):
+        for r in self.ROIS:
+            r.keepBiggestObj(connectivity)
+        # self.mergeLabels()
+        return self
+
+    def mergeLabels(self):
+        for rd,v in zip(self.ROIS,self.labelsvalues):
+            print(v)
+            O=rd.getImageAsNumpy()
+            try:
+                LABELMAP[np.where(O==1)]=v    
+            except NameError:
+                LABELMAP=O
+        self.setImageFromNumpy(LABELMAP,refimage=super().getImage())
+        return self
+    
+    def getImage(self):
+        self.mergeLabels()
+        return super().getImage()
+
+
 
 
 
@@ -1059,10 +1193,10 @@ if __name__=="__main__":
     # V.setImageFromNumpy(t,P)
     # V.changeImageSpacing([0.5,0.5,0.5])
 
-    V=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p02.nii.gz')
+    # V=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p02.nii.gz')
 
-    J=V.getWavelet()
-    J[1]["map"].writeImageAs('/g/a.nii.gz')
+    # J=V.getWavelet()
+    # J[1]["map"].writeImageAs('/g/a.nii.gz')
 
 
 
@@ -1076,3 +1210,20 @@ if __name__=="__main__":
     # I=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p03.nii.gz')
     # P=I.getDuplicate()
     
+    # P=np.array([[[0,0,0,0],[2,2,2,0],[2,2,0,0],[2,0,0,0],[0,0,0,0]],[[0,0,0,0],[2,2,2,0],[2,2,0,0],[2,0,0,2],[0,0,0,2]]])
+    # R=Roiable(roivalue=2)
+    # R.setImageFromNumpy(P)
+    
+    #R=LabelMapable(filename='/g/DAUG_p09-1/s3/Leftmriroi.nii.gz',labelsvalues=[1,2])
+    #R.keepBiggestObj(connectivity=3)
+    #R.writeImageAs('/g/a2.nii.gz')
+
+
+
+    A=Imaginable('/data/MYDATA/Dixon_Hip_Data/p20/seg/mri.nii.gz')
+    R=Imaginable('/data/MYDATA/Dixon_Hip_Data/p20/seg/roi.nii.gz')
+
+    A.cropImage([0, 0, 0],[160, 0 ,0])
+    R.cropImage([0,0, 0],[160, 0 ,0])
+    A.writeImageAs('/g/20/im.nii.gz')
+    R.writeImageAs('/g/20/r.nii.gz')

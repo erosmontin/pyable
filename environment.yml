@@ -7,7 +7,9 @@ dependencies:
   - numpy
   - simpleitk>2.0
   - matplotlib
+  - scikit-image
   - pip
+  - pywt
   - pip:
     - vtk
     - git+https://github.com/erosmontin/pynico
