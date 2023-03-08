@@ -11,6 +11,20 @@ except:
     from utils import wlt as uwlt
 from skimage import data, filters, measure, morphology
 
+def getMaskedNunmpyArray(IM,ROI):
+    """Return the values inside a region of interest
+    Args:
+      IM:
+        Imaginable
+      ROI:
+        ROIable
+
+    Returns:
+      Numpy arrays aof values
+    """
+    o=IM.getImageAsNumpy()
+    m=ROI.getImageAsNumpy()
+    return o[np.where(m>0)]
 
 def transform_point(P,transform):
     return transform.TransformPoint(P)
@@ -810,7 +824,11 @@ class Imaginable:
         return filter.GetSum()
         
     
-        
+    def getRoiableValuesUpper(self,th):
+        return Roiable(image=self.getImage()>th)
+
+
+
 
 
     def getStdValue(self):
@@ -1007,7 +1025,7 @@ class Roiable(Imaginable):
     def erodeRadius(self,radius=2):
         return self.__derodeRadius__(radius)
     def __derodeRadius__(self,radius=2,erode=True):
-        image=self.getMask()
+        image=self.getImage()
 
         if erode:
             filter = sitk.BinaryErodeImageFilter()
@@ -1019,73 +1037,31 @@ class Roiable(Imaginable):
         return self
     
     def removeSmallObj(self,voxel_threshold=50,connectivity=26):
-        mask =measure.label(self.getImageAsNumpy())
+        mask =measure.label(self.getImageAsNumpy()==1)
         mask = morphology.remove_small_objects(mask, voxel_threshold,connectivity=connectivity)
-        mask[np.where(mask==1)]=self.roiValue
-        self.setImageFromNumpy(mask)
+        mask[np.where(mask>0)]=1
+        self.setImageFromNumpy(mask,refimage=self.getImage())
         return self
 
     def removeHoles(self,voxel_threshold=50,connectivity=26):
-        mask =measure.label(self.getImageAsNumpy())
+        mask =measure.label(self.getImageAsNumpy()==1)
         mask = morphology.remove_small_holes(mask, voxel_threshold,connectivity=connectivity)
-        mask[np.where(mask==1)]=self.roiValue
-        self.setImageFromNumpy(mask)
+        mask[np.where(mask>0)]=1
+        self.setImageFromNumpy(mask,refimage=self.getImage())
         return self
     def keepBiggestObj(self,connectivity=26):
-        labelled = measure.label(self.getImageAsNumpy())
+        labelled = measure.label(self.getImageAsNumpy()==1)
         rp = measure.regionprops(labelled)
         # get size of largest cluster
         size = max([i.area for i in rp])
         # remove everything smaller than largest
-        out = morphology.remove_small_objects(labelled, min_size=size-1,connectivity=connectivity)
-        out[np.where(out==1)]=self.roiValue
-        self.setImageFromNumpy(out)
+        mask = morphology.remove_small_objects(labelled, min_size=size-1,connectivity=connectivity)
+        mask[np.where(mask>0)]=1
+        self.setImageFromNumpy(mask)
         return self
 
 
-class LabelMapable(Imaginable):
-    def __init__(self, filename=None, image=None, verbose=False,labelsvalues=None):
-        super().__init__(filename, image, verbose)
-        self.labelsvalues=labelsvalues
-        self.ROIS=[]
-        if self.labelsvalues is None:
-            self.labelsvalues=self.getImageUniqueValues(exclude=[0])
 
-        for v in self.labelsvalues:
-            self.ROIS.append(Roiable(filename,image,verbose,roivalue=v))
-        
-
-    def removeSmallObj(self,voxel_threshold=50,connectivity=26):
-        for r in self.ROIS:
-            r.removeSmallObj(voxel_threshold,connectivity)
-        self.mergeLabels()
-        return self
-
-    def removeHoles(self,voxel_threshold=50,connectivity=26):
-        for r in self.ROIS:
-            r.removeHoles(voxel_threshold,connectivity)
-        # self.mergeLabels()
-        return self
-    def keepBiggestObj(self,connectivity=26):
-        for r in self.ROIS:
-            r.keepBiggestObj(connectivity)
-        # self.mergeLabels()
-        return self
-
-    def mergeLabels(self):
-        for rd,v in zip(self.ROIS,self.labelsvalues):
-            print(v)
-            O=rd.getImageAsNumpy()
-            try:
-                LABELMAP[np.where(O==1)]=v    
-            except NameError:
-                LABELMAP=O
-        self.setImageFromNumpy(LABELMAP,refimage=super().getImage())
-        return self
-    
-    def getImage(self):
-        self.mergeLabels()
-        return super().getImage()
 
 
 
@@ -1218,12 +1194,17 @@ if __name__=="__main__":
     #R.keepBiggestObj(connectivity=3)
     #R.writeImageAs('/g/a2.nii.gz')
 
+    # from dev import LabelMapable
 
+    A=Imaginable(filename='/g/home4/p22RightmriFemur.nii.gz')
+    # R=LabelMapable('/data/MYDATA/Dixon_Hip_Data/p20/seg/roi.nii.gz',labelsvalues=[1,2])
 
-    A=Imaginable('/data/MYDATA/Dixon_Hip_Data/p20/seg/mri.nii.gz')
-    R=Imaginable('/data/MYDATA/Dixon_Hip_Data/p20/seg/roi.nii.gz')
+    # A.cropImage([160, 0, 0],[0, 0 ,0])
+    # R.cropImage([160,0, 0],[0, 0 ,0])
+    # R.removeSmallObj(voxel_threshold=10)
+    # A.writeImageAs('/g/20b/im.nii.gz')
+    # R.writeImageAs('/g/20b/r.nii.gz')
 
-    A.cropImage([0, 0, 0],[160, 0 ,0])
-    R.cropImage([0,0, 0],[160, 0 ,0])
-    A.writeImageAs('/g/20/im.nii.gz')
-    R.writeImageAs('/g/20/r.nii.gz')
+    K=A.getRoiableValuesUpper(0.9)
+
+    K.writeImageAs('/g/a.nii.gz')
