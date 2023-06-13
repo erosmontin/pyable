@@ -4,6 +4,13 @@ My collection of image and mesh functions
 1. imaginable
 1. meshable
 
+# Classes
+    - Imaginable:
+        image data 
+    - Roiable:
+        Mask with balue 1
+    - LAbelmappable:
+        Roi with multiple values (DEV)
 # versions:
 - 0.0.3 current version
 - 0.0.4 pre release

@@ -461,12 +461,17 @@ class Imaginable:
 
     def forkDuplicate(self):  
         return copy.deepcopy(self)
-    def getDuplicate(self):
-        PP=self.__class__()
-        PP.setImage(self.getImage())
-        return PP
 
-    
+#    def getDuplicate(self):
+#        PP=self.__class__()
+#        PP.setImage(self.getImage())
+#        return PP
+
+    def getDuplicate(self):
+        PP=self.__class__(image=self.getImage())
+        # PP.setImage(self.getImage())
+        return PP
+            
     def resampleOnTargetImage(self,target,interpolator = None,default_value = 0,useNearestNeighborExtrapolator=None):
         target=getmeTheSimpleITKImage(target)
         if interpolator == None:
