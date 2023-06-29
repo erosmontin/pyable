@@ -1,6 +1,9 @@
 [build-system]
-requires = ["hatchling","SimpleITK", "numpy","matplotlib"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true
 
 
 [project]
@@ -12,6 +15,9 @@ authors = [
 description = "Handy things you need for image analysis, at least me"
 readme = "README.md"
 requires-python = ">=3.6"
+
+dependencies = ["numpy","pyanico_eros_montin @ git+https://github.com/erosmontin/pynico.git",simpleitk>2.0,matplotlib,scikit-image,PyWavelets]
+
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",

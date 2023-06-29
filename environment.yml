@@ -9,7 +9,7 @@ dependencies:
   - matplotlib
   - scikit-image
   - pip
-  - pywt
+  # - pywt
   - pip:
     - vtk
     - git+https://github.com/erosmontin/pynico
