@@ -16,7 +16,7 @@ description = "Handy things you need for image analysis, at least me"
 readme = "README.md"
 requires-python = ">=3.6"
 
-dependencies = ["numpy","pyanico_eros_montin @ git+https://github.com/erosmontin/pynico.git","simpleitk>2.0","matplotlib","scikit-image","PyWavelets"]
+dependencies = ["numpy","pynico_eros_montin @ git+https://github.com/erosmontin/pynico.git","simpleitk>2.0","matplotlib","scikit-image","PyWavelets"]
 
 classifiers = [
     "Programming Language :: Python :: 3",
