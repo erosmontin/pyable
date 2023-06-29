@@ -8,7 +8,7 @@ allow-direct-references = true
 
 [project]
 name = "pyable_eros_montin"
-version = "0.0.4rc"
+version = "0.0.4.1rc"
 authors = [
   { name="Dr. Eros Montin, PhD", email="eros.montin@gmail.com" },
 ]
@@ -16,7 +16,7 @@ description = "Handy things you need for image analysis, at least me"
 readme = "README.md"
 requires-python = ">=3.6"
 
-dependencies = ["numpy","pyanico_eros_montin @ git+https://github.com/erosmontin/pynico.git",simpleitk>2.0,matplotlib,scikit-image,PyWavelets]
+dependencies = ["numpy","pyanico_eros_montin @ git+https://github.com/erosmontin/pynico.git","simpleitk>2.0","matplotlib","scikit-image","PyWavelets"]
 
 classifiers = [
     "Programming Language :: Python :: 3",
