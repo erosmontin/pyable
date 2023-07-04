@@ -50,9 +50,9 @@ def getMatrixToPatientOrientationHF(L):
 
 
 
-def numpyToImaginable(x,ref=None):
+def numpyToImaginable(x,ref=None,vector=False):
     T=Imaginable()
-    T.setImageFromNumpy(x,refimage=ref)
+    T.setImageFromNumpy(x,refimage=ref,vector=vector)
     return T
 
 
