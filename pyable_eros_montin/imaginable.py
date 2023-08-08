@@ -200,7 +200,9 @@ class Imaginable:
 
 
         
-
+    def getValuesInRoi(self,roi):
+        return getMaskedNunmpyArray(self,roi)
+    
     def getWavelet(self,wtype='Haar'):
         WT=uwlt(self.getImageAsNumpy(),wtype)
         NS=[g*2 for g in self.getImageSpacing()]
@@ -975,8 +977,48 @@ class Imaginable:
     #     mask=getmeTheSimpleITKImage(mask)
         
     #     self.setImage(,'masked with image')
+    def __applyImageToImageFilter__(self,f,cast=False):
+        if cast:
+            S=self.getDuplicate()
+            O=self.getImagePixelTypeAsID()
+            # cast to float
+            S.changePixelType(sitk.sitkFloat32)
+            S.setImage(f.Execute(S.getImage()))
+            S.changePixelType(O)
+            self.setImage(S.getImage())
+        else:
+            self.setImage(f.Execute(self.getImage()))
 
+        return self
 
+    def sharpen(self):
+        f = sitk.LaplacianSharpeningImageFilter()
+        return self.__applyImageToImageFilter__(f)
+    
+    def denoise(self,timestep=None,numberOfIterations=10,stencilRadius=None):
+        # https://itk.org/Doxygen/html/Examples_2Filtering_2CurvatureFlowImageFilter_8cxx-example.html
+        if stencilRadius==None:
+            f = sitk.CurvatureFlowImageFilter()
+            cast=False
+        else:
+            f=sitk.MinMaxCurvatureFlowImageFilter()
+            cast=True
+        f.SetNumberOfIterations(numberOfIterations)
+        if timestep==None:
+            if self.getImageDimension()==3:
+                timestep=0.0625
+            elif self.getImageDimension()==2:
+                timestep=0.125
+            else:
+                raise Exception("pleae set a timestep")
+        f.SetTimeStep(timestep)
+        return self.__applyImageToImageFilter__(f,cast=cast)
+    
+
+    
+    
+    
+    
 def maskSITKImage(r,maskingvalue=1,foreground=1,outsidevalue=0):
     return sitk.Mask(r, sitk.Cast(foreground,sitk.sitkInt16), maskingValue=maskingvalue, outsideValue=outsidevalue)
 
@@ -988,6 +1030,8 @@ def getDirectiontransform(image):
     cosines = sitk.AffineTransform(dimension)
     cosines.SetCenter(image.getImageOrigin())
     return cosines
+
+
 
 class SITKImaginable(Imaginable):
     pass
@@ -1082,134 +1126,22 @@ class Roiable(Imaginable):
 #     def toVtk(self):
 #         return sitk2vtk(self.getImage(), debugOn=False)
 if __name__=="__main__":
-
-    # PT=pn.Pathable('/data/MYDATA/3T vs 7T/registration_test')
-    # j=pn.forkPathable(PT)
-    # t=SITKImaginable(j.addBaseName('Duke3T.nii.gz').getPosition())
-    
-    # s=SITKImaginable(j.addBaseName('Male7T.nii.gz').getPosition())
-    # g=SITKImaginable(j.addBaseName('MaleGeometry.nii.gz').getPosition())
-    # o=j.addBaseName('__tMale7T.nii.gz').getPosition()
-    # o2=j.addBaseName('__t2Male7T.nii.gz').getPosition()
-    # d=SITKImaginable(j.addBaseName('T.mhd').getPosition())
-    # d2=SITKImaginable(j.addBaseName('A.mhd').getPosition())
-    # d3=SITKImaginable(j.addBaseName('B.mhd').getPosition())
-    
-    # t0=j.appendPath('7T').addBaseName('t.txt').getPosition()
-    # t1=j.changeBaseName('a.txt').getPosition()
-    # t2=j.changeBaseName('b.txt').getPosition()
-
-    # d.add(d2).add(d3)
-    
-
-    # W=sitk.WarpImageFilter()
-    # I=sitk.sitkLinear
-    # W.SetInterpolator(I)
-    # W.SetOutputParameteresFromImage(t.getImage())
-    # L=W.Execute(s.getImage(),d.getImage())
-    # oi=SITKImaginable(image=L)
-    # oi.writeImageAs(o)
-
-    # W=sitk.WarpImageFilter()
-    # I=sitk.sitkNearestNeighbor()
-    # W.SetInterpolator(I)
-    # W.SetOutputParameteresFromImage(t.getImage())
-    # L=W.Execute(s.getImage(),d.getImage())
-    # oi=SITKImaginable(image=L)
-    # oi.writeImageAs(o)
+    A=Imaginable('/data/MYDATA/fulldixon-images/C-4/data/wo.nii')
+    A.sharpen()
+    A.denoise(numberOfIterations=10,stencilRadius=50)
+    A.writeImageAs('/g/a.nii')
+ 
 
 
-
-    
-    # T=getTransformFromFile([t0,t1,t2])
-    # s.transformFromRegitration(T)
-    # s.writeImageAs(o)
-
-
-    # A=Roiable(filename='tests/data/b.nii.gz')
-    # H=pn.Pathable('/data/MYDATA/TDCS/EROS_TDCS/Healthy/NC_sub23_20190523/Manual_mask_NC_sub23_20190523LCA.nii')
-    # A=Roiable(filename=H.getPosition())
-    # A.viewK()
-    # A.viewJ()
-    
-    # h=A.getImageAsNumpyZYX()
-    # h=h[:,0:-1:3,0:-1:2]
-    # A.setImageFromNumpyZYX(h)
-    # A.changeImageSpacing([2,3,1])
-    # A.viewAxial()
-    # A.rotateImage([0,0,20])
-    # A.viewAxial()
-    # A.viewSagittal()
-    # A.viewCoronal()
-    # A.writeImageAs(H.changeBaseName('A.mha').changePath('/data/').getPosition())
-    # A.dilateRadius(9)
-    
-#    A.viewAxial()
-    # A.writeImageAs('/data/B.mha')
-    # A.whathappened()
-
-    # A.viewAxial()
-    # t=np.zeros((50,40,30))
-    # saveNumpy(t,'/data/garbage/a.nii.gz')
-    # t[:,10:20,10:30]=1
-    # P=Imaginable()
-    
-    # P.setImageFromNumpyZYX(t,origin=[0,0,0],spacing=[1,1,1],direction=[1,0,0,0,1,0,0,0,1])
-
-    # P.viewAxial()
-    # ll=P.getImageAsNumpyXYZ()
-
-    # P.changeImageSize([z*4 for z in P.getImageSize()],bgvalue=0)
-    # P.viewAxial()
-    # P.writeImageAs('/data/tmp/a.nii.gz')
+    # A=Imaginable('/data/MYDATA/fulldixon-images/C-4/data/IN.nii')
+    # B=Imaginable('/data/MYDATA/fulldixon-images/C-4/data/OUT.nii')
+    # A.add(B)
+    # A.divide(0.5)
+    # A.writeImageAs('/g/_wo.nii')
+    # A.reset()
+    # A.subtract(B)
+    # A.divide(0.5)
+    # A.applyAbs()
+    # A.writeImageAs('/g/_fo.nii')
 
 
-    # t=np.array([[20,10,20],[20,10,20]])
-    # P=Roiable()
-    # P.setImageFromNumpy(t)
-    # P.setImageSpacing([4,4,8])
-    
-    # t=np.array([[20,10,20],[20,10,4]])/2
-    # V=Imaginable()
-    # V.setImageFromNumpy(t,P)
-    # V.changeImageSpacing([0.5,0.5,0.5])
-
-    # V=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p02.nii.gz')
-
-    # J=V.getWavelet()
-    # J[1]["map"].writeImageAs('/g/a.nii.gz')
-
-
-
-    # I=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p02.nii.gz')
-    # print(I.getImageDirection())
-    
-    # I.resampleOnCanonicalSpace()
-
-    # print(I.getImageDirection())
-    # I.writeImageAs('/g/2.nii.gz')
-    # I=Imaginable(filename='/data/PROJECTS/HIPSEGENTATION/data_link/input/p03.nii.gz')
-    # P=I.getDuplicate()
-    
-    # P=np.array([[[0,0,0,0],[2,2,2,0],[2,2,0,0],[2,0,0,0],[0,0,0,0]],[[0,0,0,0],[2,2,2,0],[2,2,0,0],[2,0,0,2],[0,0,0,2]]])
-    # R=Roiable(roivalue=2)
-    # R.setImageFromNumpy(P)
-    
-    #R=LabelMapable(filename='/g/DAUG_p09-1/s3/Leftmriroi.nii.gz',labelsvalues=[1,2])
-    #R.keepBiggestObj(connectivity=3)
-    #R.writeImageAs('/g/a2.nii.gz')
-
-    # from dev import LabelMapable
-
-    A=Imaginable(filename='/g/home4/p22RightmriFemur.nii.gz')
-    # R=LabelMapable('/data/MYDATA/Dixon_Hip_Data/p20/seg/roi.nii.gz',labelsvalues=[1,2])
-
-    # A.cropImage([160, 0, 0],[0, 0 ,0])
-    # R.cropImage([160,0, 0],[0, 0 ,0])
-    # R.removeSmallObj(voxel_threshold=10)
-    # A.writeImageAs('/g/20b/im.nii.gz')
-    # R.writeImageAs('/g/20b/r.nii.gz')
-
-    K=A.getRoiableValuesUpper(0.9)
-
-    K.writeImageAs('/g/a.nii.gz')
