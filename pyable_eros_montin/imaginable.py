@@ -64,7 +64,7 @@ def getMatrixToPatientOrientation(IM):
     L=[['Right','Left'],['Anterior','Posterior'],['Down','Up']]
     O0= IM.getCoordinatesFromIndex([0]*IM.getImageDimension())
     O1= IM.getCoordinatesFromIndex(IM.getImageSize())    
-    for a in IM.getImageDimension():
+    for a in range(IM.getImageDimension()):
         if O0[a]<O1[a]:
             L[a].reverse()   
     return L
