@@ -48,6 +48,26 @@ def getMatrixToPatientOrientationHF(L):
         L[2].reverse()   
     return L
 
+def getMatrixToPatientOrientation(IM):
+    """_summary_
+    The function help you understand the real world directions and the matrix one
+    an output that goes like:
+    [['Left','Right'],['Anterior','Posterior'],['Down','Up']]
+    means that the first direction goes from left to right, the second from Anterior to posterior and so on
+    Args:
+        IM (able): input image
+
+    Returns:
+        _type_: _description_
+    """    
+    #input is an imaginable  
+    L=[['Right','Left'],['Anterior','Posterior'],['Down','Up']]
+    O0= IM.getCoordinatesFromIndex([0]*IM.getImageDimension())
+    O1= IM.getCoordinatesFromIndex(IM.getImageSize())    
+    for a in IM.getImageDimension():
+        if O0[a]<O1[a]:
+            L[a].reverse()   
+    return L
 
 
 def numpyToImaginable(x,ref=None,vector=False):
