@@ -11,6 +11,33 @@ except:
     from utils import wlt as uwlt
 from skimage import data, filters, measure, morphology
 
+def create_affine_matrix(rotation=[0,0,0], scaling=[1,1,1]):
+    """Creates a 3D affine matrix given three rotations, three scalings, and three translations.
+
+    Args:
+        rotation: The angle of rotations 3d in degrees
+        scaling: The scaling factor along the x-axis.
+
+    Returns:
+        A 3x3 NumPy array representing the affine matrix.
+    """
+    rx,ry,rz=[np.deg2rad(r) for r in rotation]
+    sx,sy,sz=scaling
+    rotation_matrix= np.array([[np.cos(rx), -np.sin(rx), 0],
+                                [np.sin(rx), np.cos(rx), 0],
+                                [0, 0, 1]]) @ np.array([[np.cos(ry), 0, np.sin(ry)],
+                                                    [0, 1, 0],
+                                                    [-np.sin(ry), 0, np.cos(ry)]]) @ np.array([[np.cos(rz), np.sin(rz), 0],
+                                                                                                    [-np.sin(rz), np.cos(rz), 0],
+                                                                                                    [0, 0, 1]])
+    
+    scaling_matrix = np.array([[sx, 0, 0],
+                              [0, sy, 0],
+                              [0, 0, sz]])
+
+
+    return rotation_matrix @ scaling_matrix 
+
 def getMaskedNunmpyArray(IM,ROI):
     """Return the values inside a region of interest
     Args:
@@ -623,7 +650,7 @@ class Imaginable:
             useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator
         return self.setImage(self.__transformImage__(T,interpolator,reference_image,default_value,useNearestNeighborExtrapolator),f"tranlated of {T}")
 
-    def transformImageAffine(self,A,center,centerindex=False,interpolator = None,reference_image=None ,default_value = 0.0,useNearestNeighborExtrapolator=None):
+    def transformImageAffine(self,A,translation=None,center=[],centerindex=False,interpolator = None,reference_image=None ,default_value = 0.0,useNearestNeighborExtrapolator=None):
         if interpolator == None:
             interpolator = self.dfltInterpolator
         if useNearestNeighborExtrapolator ==None:
@@ -639,6 +666,8 @@ class Imaginable:
         transform = sitk.AffineTransform(dimension)
         transform.SetMatrix(A)
         transform.SetCenter(center)
+        if translation is not None:
+            transform.SetTranslation(translation)
         return self.setImage(self.__transformImage__(transform,interpolator,reference_image,default_value),f"scaled of {A}")
 
    
