@@ -278,6 +278,12 @@ class Imaginable:
     def reset(self):
         while self.imageStack.size()>1:
             self.undo()
+    def isImaginableInTheSameSpace(self,image):
+        return ((self.getImageSize() != image.getImageSize()) or
+             (self.getImageDirection() != image.getImageDirection()) or
+             (self.getImageOrigin() != image.getImageOrigin()) or
+               (self.getImageSpacing() != image.getImageSpacing() ))
+    
     def undo(self):
         if self.imageStack.size()>1:
             self.imageStack.pop()
