@@ -5,10 +5,14 @@ build-backend = "hatchling.build"
 [tool.hatch.metadata]
 allow-direct-references = true
 
+[tool.hatch.build.targets.wheel]
+packages = [
+    "src/cbltest"
+]
 
 [project]
 name = "pyable_eros_montin"
-version = "0.0.6"
+version = "0.0.7"
 authors = [
   { name="Dr. Eros Montin, PhD", email="eros.montin@gmail.com" },
 ]
