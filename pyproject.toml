@@ -8,7 +8,7 @@ allow-direct-references = true
 
 [project]
 name = "pyable_eros_montin"
-version = "0.0.5.6"
+version = "0.0.6"
 authors = [
   { name="Dr. Eros Montin, PhD", email="eros.montin@gmail.com" },
 ]

@@ -1112,7 +1112,7 @@ class Roiable(Imaginable):
         self.dfltInterpolator=sitk.sitkNearestNeighbor
         self.dfltuseNearestNeighborExtrapolator=True
         if roivalue:
-            self.setImage(self.getImage()==roivalue,'now the mask is rqual to one')
+            self.setImage(self.getImage()==roivalue,'now the mask is equal to one')
 
     def getCenterIndex(self):
         label_statistic = sitk.LabelIntensityStatisticsImageFilter()
@@ -1163,6 +1163,13 @@ class Roiable(Imaginable):
         mask[np.where(mask>0)]=1
         self.setImageFromNumpy(mask)
         return self
+    def getBoundingBox(self):
+        N=self.getImageAsNumpy()
+        roi_indices = np.argwhere(N == 1)
+        min_coords = np.min(roi_indices, axis=0)
+        max_coords = np.max(roi_indices, axis=0)
+        bounding_box = (min_coords, max_coords)
+        return bounding_box
 
 
 
