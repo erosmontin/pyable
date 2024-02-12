@@ -4,6 +4,7 @@ import SimpleITK as sitk
 import numpy as np
 import copy
 import matplotlib.pyplot as plt
+import os
 
 try:
     from .utils import wlt as uwlt
@@ -324,7 +325,8 @@ class Imaginable:
     
     def writeImageAs(self,filename,force=True):
         if ((not pn.Pathable(filename).exists()) or (force)):
-            pn.Pathable(filename).ensureDirectoryExistence()
+            if os.path.dirname(filename)!='':
+                pn.Pathable(filename).ensureDirectoryExistence()
             try:
                 sitk.WriteImage(self.getImage(), filename)
                 return filename
