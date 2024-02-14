@@ -12,6 +12,26 @@ except:
     from utils import wlt as uwlt
 from skimage import data, filters, measure, morphology
 
+def dcm2niixFieldsToJson(fn,field_list=["RepetitionTime","FlipAngle","MagneticFieldStrength","ScanningSequence","NonlinearGradientCorrection","SliceThickness","SpacingBetweenSlices","SAR","EchoTime","RepetitionTime","SpoilingState","FlipAngle","PartialFourier","TxRefAmp","PixelBandwidth","PatientPosition","MRAcquisitionType","ImagingFrequency","ScanOptions"]):
+    """
+    This function convert the fields of dcm2niix file to a json file with the fields specified in field_list
+
+    Args:
+        fn (str): filename
+        field_list (list, optional): _description_. Defaults to ["RepetitionTime","FlipAngle","MagneticFieldStrength","ScanningSequence","NonlinearGradientCorrection","SliceThickness","SpacingBetweenSlices","SAR","EchoTime","RepetitionTime","SpoilingState","FlipAngle","PartialFourier","TxRefAmp","PixelBandwidth","PatientPosition","MRAcquisitionType","ImagingFrequency","ScanOptions"].
+    """    
+    import json
+    with open(fn) as f:
+        data = json.load(f)
+    o={}
+    for f in field_list:
+        try:
+            o[f]=data[f]
+        except:
+            o[f]=None
+
+    return o
+    
 def create_affine_matrix(rotation=[0,0,0], scaling=[1,1,1]):
     """Creates a 3D affine matrix given three rotations, three scalings, and three translations.
 
