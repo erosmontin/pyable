@@ -778,6 +778,8 @@ class Imaginable:
         if dtype=="complex32":
             dtype=sitk.sitkComplexFloat32            
         return self.changePixelType(dtype)
+    def possiblePixelTypes(self):
+        return "complex32,complex64,float,float64,int16,int32,int8,uint16,uint32,uint8"
     
     def getNumberOfNonZeroVoxels(self):
         return np.count_nonzero(self.getImageAsNumpyZYX())
