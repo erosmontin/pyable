@@ -755,8 +755,28 @@ class Imaginable:
     def changePixelType(self,dtype):
         return self.setImage(sitk.Cast(self.getImage(),dtype),f'casted to {dtype}')
     def cast(self,dtype):
-        if dtype==float:
+        if dtype=="float":
             dtype=sitk.sitkFloat32
+        if dtype=="int32":
+            dtype=sitk.sitkInt32
+        if dtype=="uint32":
+            dtype=sitk.sitkUInt32
+        if dtype=="uint8":
+            dtype=sitk.sitkUInt8
+        if dtype=="int8":
+            dtype=sitk.sitkInt8
+        if dtype=="int16":
+            dtype=sitk.sitkInt16
+        if dtype=="uint16":
+            dtype=sitk.sitkUInt16
+        if dtype=="float64":
+            dtype=sitk.sitkFloat64
+        if dtype=="complex":
+            dtype=sitk.sitkComplexFloat32
+        if dtype=="complex64":
+            dtype=sitk.sitkComplexFloat64
+        if dtype=="complex32":
+            dtype=sitk.sitkComplexFloat32            
         return self.changePixelType(dtype)
     
     def getNumberOfNonZeroVoxels(self):
