@@ -9,10 +9,13 @@ My collection of image and mesh functions
         image data 
     - Roiable:
         Mask with balue 1
-    - LAbelmappable:
+    - LabelaMapable
+    - LabelMapableROI:
         Roi with multiple values (DEV)
 # versions:
-- 0.0.3 current version
+- 0.1.0.6 (May, 24)
+    - LabelMap are Imaginable interpolator = sitkNearestNeighbor and dfltuseNearestNeighborExtrapolator=True 
+
 - 0.0.4 pre release
     - updated the concept of change and set
     - dflt interpolation and deflt usenearest..

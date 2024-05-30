@@ -1220,7 +1220,14 @@ class Roiable(Imaginable):
 
 
 
+
 class LabelMapable(Imaginable):
+    def __init__(self, filename=None, image=None, verbose=False):
+        super().__init__(filename, image, verbose)
+        self.dfltInterpolator=sitk.sitkNearestNeighbor
+        self.dfltuseNearestNeighborExtrapolator=True
+
+class LabelMapableROI(Imaginable):
     def __init__(self, filename=None, image=None, verbose=False,labelsvalues=None):
         super().__init__(filename, image, verbose)
         self.dfltInterpolator=sitk.sitkNearestNeighbor
@@ -1261,6 +1268,8 @@ class LabelMapable(Imaginable):
                 LABELMAP=O
         self.setImageFromNumpy(LABELMAP,refimage=super().getImage())
         return self
+
+
 
 
 
