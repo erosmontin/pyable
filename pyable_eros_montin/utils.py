@@ -119,7 +119,6 @@ def overlayNumpyImageAndNumpyLabelmap(image, labelmap, image_cmap='gray', labelm
     # Add the colorbar
     plt.colorbar(sm, label='Labelmap')
 
-        # Invert x and y axes
     if title:
         plt.title(title)
     
