@@ -1,5 +1,7 @@
-from pyable_eros_montin import imaginable
-
+try:
+    import imaginable as ima
+except:
+    import pyable_eros_montin.imaginable as ima
 
 import numpy as np
 
@@ -61,8 +63,11 @@ def getImaginableSlice(I,axis,index):
     elif axis==2:
         slicer=I.getSliceNormalK
         # self.ratio=k[1]/k[0]
-    o=imaginable(image=slicer(index)).getImageAsNumpy()
+    o=type(I)(image=slicer(index))
     return o
+
+def getImaginableSliceNumpy(I,axis,index):
+    return getImaginableSlice(I,axis,index).getImageAsNumpy()
 
 
 from PIL import Image
@@ -74,12 +79,89 @@ def saveSliceToImage(I,axis,index,fn,spacing=None):
     f=getImaginableSlice(I,axis=axis,index=index)
     matplotlib.image.imsave(fn, f,vmin=0.2,vmax=1,cmap='jet'  )
 
-import pywt
-def wlt(x=None,wtype='Haar'):
-    return pywt.dwtn(x, wtype)
+
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+
+def overlayNumpyImageAndNumpyLabelmap(image, labelmap, image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None,title=None):
+    # Display the image as it is
+    plt.imshow(image, cmap=image_cmap, vmin=image_vmin, vmax=image_vmax,origin='lower')
+
+    # Clip the labelmap values to the desired range
+    # labelmap_clipped = labelmap
+    # if (labelmap_vmin is None) or (labelmap_vmax is None):
+    #     if labelmap_vmin is None:
+    #         labelmap_vmin = np.min(labelmap)
+    #     if labelmap_vmax is None:
+    #         labelmap_vmax = np.max(labelmap)
+            
+    #     labelmap_clipped = np.clip(labelmap, labelmap_vmin, labelmap_vmax)
+
+    # Normalize the labelmap
+    labelmap_norm = plt.Normalize(labelmap_vmin, labelmap_vmax)
+
+    # Apply colormap to the normalized labelmap
+    labelmap_colored = cm.get_cmap(labelmap_cmap)(labelmap_norm(labelmap))
+
+
+    # Create an alpha channel based on the labelmap
+    alpha_channel = np.where(labelmap == 0, 0, alpha_value)
+
+    # Replace the alpha channel in the colored labelmap
+    labelmap_colored[..., 3] = alpha_channel
+
+    # Overlay the labelmap on top of the image
+    lbl=plt.imshow(labelmap_colored,origin='lower')
+    # Create a ScalarMappable object for the colorbar
+    sm = plt.cm.ScalarMappable(cmap=labelmap_cmap, norm=labelmap_norm)
+    sm.set_array([])
+
+    # Add the colorbar
+    plt.colorbar(sm, label='Labelmap')
+
+        # Invert x and y axes
+    if title:
+        plt.title(title)
+    
+    if save:
+        plt.savefig(save,dpi=300)
+    if show:
+        plt.show()
+    
+    
 
 
 
+if __name__=="__main__":
+    IM=ima.Imaginable('/data/MYDATA/fulldixon-images/C-1/data/wo.nii')
+    R=ima.LabelMapable('/data/MYDATA/fulldixon-images/C-1/data/fo.nii')
+    P=ima.LabelMapable('/data/MYDATA/fulldixon-images/C-1/data/roi.nii.gz')
+    ORIENTATION='RPI'
+    # IM.dicomOrient(ORIENTATION)
+    # R.resampleOnTargetImage(IM)
+    # R.dicomOrient(ORIENTATION)
+    # P.resampleOnTargetImage(IM)
+    # P.dicomOrient(ORIENTATION)
+    # for SL in range(IM.getImageSize(0)):
+
+    #     im=getImaginableSliceNumpy(IM,0,SL)
+    #     im2=getImaginableSliceNumpy(R,0,SL)
+    #     r=getImaginableSliceNumpy(P,0,SL)
+    #     im2[r==0]=0
+    #     overlayNumpyImageAndNumpyLabelmap(im.T,im2.T)
+    #     plt.savefig(f'/g/{SL}.png')
+    #     plt.close()
+    
+    
+    NP=P.getImageAsNumpy()
+    NP[NP>0]=1
+    P.setImageFromNumpy(NP)
+    
+    R.multiply(P)
+    IM.overlayAble(R,2,40,show=True)
+    
+    
+    
 
 # if __name__=="__main__":
 

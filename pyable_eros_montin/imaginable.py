@@ -7,9 +7,13 @@ import matplotlib.pyplot as plt
 import os
 
 try:
-    from .utils import wlt as uwlt
+    from .utils import *
 except:
-    from utils import wlt as uwlt
+    try:
+        from utils import *
+    except:
+        from pyable_eros_montin.utils import *
+        
 from skimage import data, filters, measure, morphology
 
 def dcm2niixFieldsToJson(fn,field_list=["RepetitionTime","FlipAngle","MagneticFieldStrength","ScanningSequence","NonlinearGradientCorrection","SliceThickness","SpacingBetweenSlices","SAR","EchoTime","RepetitionTime","SpoilingState","FlipAngle","PartialFourier","TxRefAmp","PixelBandwidth","PatientPosition","MRAcquisitionType","ImagingFrequency","ScanOptions"]):
@@ -271,23 +275,23 @@ class Imaginable:
     def getValuesInRoi(self,roi):
         return getMaskedNunmpyArray(self,roi)
     
-    def getWavelet(self,wtype='Haar'):
-        WT=uwlt(self.getImageAsNumpy(),wtype)
-        NS=[g*2 for g in self.getImageSpacing()]
-        O=[]
-        #this seems to be an offset at least for haar
-        Z=[0]*self.getImageDimension()
-        U=[0]*self.getImageDimension()
-        T=[(o-z)/2 for z,o in zip(self.getCoordinatesFromIndex(Z),self.getCoordinatesFromIndex(U))]
-        for t in WT.keys():
-            K=numpyToImaginable(WT[t],self)
-            K.setImageSpacing(NS)
-            K.translateImage(T)
-            O.append({"type":type(self),
-                    "name":t,
-                    "map":K.getDuplicate()
-            })
-        return O
+    # def getWavelet(self,wtype='Haar'):
+    #     WT=uwlt(self.getImageAsNumpy(),wtype)
+    #     NS=[g*2 for g in self.getImageSpacing()]
+    #     O=[]
+    #     #this seems to be an offset at least for haar
+    #     Z=[0]*self.getImageDimension()
+    #     U=[0]*self.getImageDimension()
+    #     T=[(o-z)/2 for z,o in zip(self.getCoordinatesFromIndex(Z),self.getCoordinatesFromIndex(U))]
+    #     for t in WT.keys():
+    #         K=numpyToImaginable(WT[t],self)
+    #         K.setImageSpacing(NS)
+    #         K.translateImage(T)
+    #         O.append({"type":type(self),
+    #                 "name":t,
+    #                 "map":K.getDuplicate()
+    #         })
+    #     return O
     def getImage(self):
         return self.imageStack.peek()
 
@@ -370,6 +374,35 @@ class Imaginable:
         L.reverse()
         o=np.transpose(self.getImageAsNumpyZYX(), L)
         return o
+    
+    
+    
+    def overlayAble(self,secondimaginable, axis,index,image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None):
+        """_summary_
+
+        Args:
+            secondimaginable (_type_): _description_
+            image_cmap (str, optional): _description_. Defaults to 'gray'.
+            labelmap_cmap (str, optional): _description_. Defaults to 'jet'.
+            alpha_value (float, optional): _description_. Defaults to 0.5.
+            image_vmin (_type_, optional): _description_. Defaults to None.
+            image_vmax (_type_, optional): _description_. Defaults to None.
+            labelmap_vmin (_type_, optional): _description_. Defaults to None.
+            labelmap_vmax (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
+        IM=self
+        ROI=secondimaginable
+        
+        im=getImaginableSliceNumpy(IM,axis,index)
+        im2=getImaginableSliceNumpy(ROI,axis,index)
+        
+        
+        return overlayNumpyImageAndNumpyLabelmap(im.T, im2.T, image_cmap=image_cmap,labelmap_cmap=labelmap_cmap,alpha_value=alpha_value,image_vmax=image_vmax,image_vmin=image_vmin,labelmap_vmax=labelmap_vmax,labelmap_vmin=labelmap_vmin,show=show,save=save)
+
+    
 
     def resampleOnCanonicalSpace(self,interpolator=None,useNearestNeighborExtrapolator=None,bgvalue=0.0):
         if interpolator == None:
@@ -452,6 +485,10 @@ class Imaginable:
         # self.setImage(sitk.Resample(image, self.getImageSize(), t,  interpolator, self.getImageOrigin(), self.getImageSpacing(),direction, bgvalue,image.GetPixelIDValue(),useNearestNeighborExtrapolator),mess)
         # return self
 
+    def dicomOrient(self,orientation='LPS'):
+        self.setImage(sitk.DICOMOrient(self.getImage(),orientation),'image oriented to '+orientation)
+        return self
+    
 
     def setImageSpacing(self,spacing):
         image=self.getImage()
@@ -1226,8 +1263,11 @@ class LabelMapable(Imaginable):
         super().__init__(filename, image, verbose)
         self.dfltInterpolator=sitk.sitkNearestNeighbor
         self.dfltuseNearestNeighborExtrapolator=True
+    def noNearestNeighborExtrapolator(self):
+        self.dfltuseNearestNeighborExtrapolator=False
+        return self
 
-class LabelMapableROI(Imaginable):
+class LabelMapableROI(LabelMapable):
     def __init__(self, filename=None, image=None, verbose=False,labelsvalues=None):
         super().__init__(filename, image, verbose)
         self.dfltInterpolator=sitk.sitkNearestNeighbor

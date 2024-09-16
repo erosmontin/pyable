@@ -1,5 +1,6 @@
 # pyable
 My collection of image and mesh functions
+based on SimpleITK
 
 1. imaginable
 1. meshable
@@ -13,8 +14,10 @@ My collection of image and mesh functions
     - LabelMapableROI:
         Roi with multiple values (DEV)
 # versions:
+- 0.1.1 (Sept, 24)
+    - 
 - 0.1.0.6 (May, 24)
-    - LabelMap are Imaginable interpolator = sitkNearestNeighbor and dfltuseNearestNeighborExtrapolator=True 
+    - LabelMap are Imaginable with interpolator = sitkNearestNeighbor and dfltuseNearestNeighborExtrapolator=True 
 
 - 0.0.4 pre release
     - updated the concept of change and set
