@@ -377,7 +377,7 @@ class Imaginable:
     
     
     
-    def overlayAble(self,secondimaginable, axis,index,image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None):
+    def overlayAble(self,secondimaginable, axis,index,image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None,title=None,labelmap_name=None):
         """_summary_
 
         Args:
@@ -400,7 +400,7 @@ class Imaginable:
         im2=getImaginableSliceNumpy(ROI,axis,index)
         
         
-        return overlayNumpyImageAndNumpyLabelmap(im.T, im2.T, image_cmap=image_cmap,labelmap_cmap=labelmap_cmap,alpha_value=alpha_value,image_vmax=image_vmax,image_vmin=image_vmin,labelmap_vmax=labelmap_vmax,labelmap_vmin=labelmap_vmin,show=show,save=save)
+        return overlayNumpyImageAndNumpyLabelmap(im.T, im2.T, image_cmap=image_cmap,labelmap_cmap=labelmap_cmap,alpha_value=alpha_value,image_vmax=image_vmax,image_vmin=image_vmin,labelmap_vmax=labelmap_vmax,labelmap_vmin=labelmap_vmin,show=show,save=save,title=title,labelmap_name=labelmap_name)
 
     
 

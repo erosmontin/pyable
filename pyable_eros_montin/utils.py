@@ -83,7 +83,7 @@ def saveSliceToImage(I,axis,index,fn,spacing=None):
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 
-def overlayNumpyImageAndNumpyLabelmap(image, labelmap, image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None,title=None):
+def overlayNumpyImageAndNumpyLabelmap(image, labelmap, image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None,title=None,labelmap_name=None):
     # Display the image as it is
     plt.imshow(image, cmap=image_cmap, vmin=image_vmin, vmax=image_vmax,origin='lower')
 
@@ -117,7 +117,8 @@ def overlayNumpyImageAndNumpyLabelmap(image, labelmap, image_cmap='gray', labelm
     sm.set_array([])
 
     # Add the colorbar
-    plt.colorbar(sm, label='Labelmap')
+    plt.colorbar(sm, label=labelmap_name)
+    
 
     if title:
         plt.title(title)
@@ -157,7 +158,7 @@ if __name__=="__main__":
     P.setImageFromNumpy(NP)
     
     R.multiply(P)
-    IM.overlayAble(R,2,40,show=True)
+    IM.overlayAble(R,1,160,show=True,title='Overlayed',labelmap_name='Femur',alpha_value=0.3)
     
     
     
