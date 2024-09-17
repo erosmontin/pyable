@@ -158,7 +158,11 @@ if __name__=="__main__":
     P.setImageFromNumpy(NP)
     
     R.multiply(P)
-    IM.overlayAble(R,1,160,show=True,title='Overlayed',labelmap_name='Femur',alpha_value=0.3)
+    plt.subplot(1,2,1)
+    IM.overlayAble(R,1,160,show=False,title='Overlayed',labelmap_name='Femur',alpha_value=0.3)
+    plt.subplot(1,2,2)
+    IM.overlayAble(R,2,40,show=False,title='Overlayed',labelmap_name='Femur',alpha_value=0.3)
+    plt.show()
     
     
     
