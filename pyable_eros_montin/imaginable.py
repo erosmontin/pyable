@@ -972,7 +972,30 @@ class Imaginable:
 
 
 
+    def getBoundingBox(self,exclude=[0]):
+        """
+        This function returns the bounding box of the non-zero values in the image
 
+        Args:
+            exclude (list, optional): _description_. Defaults to [0].
+
+        Returns:
+            _type_: _description_
+        """
+        N=self.getImageAsNumpy()
+        mask = ~np.isin(N, exclude)
+
+        # Apply the mask to the array
+        N_masked = N[mask]
+
+        # Find the indices of the non-zero elements
+        roi_indices = np.argwhere(N_masked)
+
+        min_coords = np.min(roi_indices, axis=0)
+        max_coords = np.max(roi_indices, axis=0)
+        bounding_box = (min_coords, max_coords)
+
+        return bounding_box
 
     def getStdValue(self):
         image=self.getImage()
@@ -1195,14 +1218,14 @@ class Roiable(Imaginable):
         if roivalue:
             self.setImage(self.getImage()==roivalue,'now the mask is equal to one')
 
-    def getCenterIndex(self):
+    def getCenterOfGravityIndex(self):
         label_statistic = sitk.LabelIntensityStatisticsImageFilter()
         label_statistic.Execute(self.getImage())
         center_gravity = label_statistic.GetCenterGravity(1)
         return center_gravity
     
-    def  getCenterCoordinates(self):
-        center_gravity_coordinate = self.getCoordinatesFromIndex(self.getCenterIndex())
+    def  getCenterOfGravityCoordinates(self):
+        center_gravity_coordinate = self.getCoordinatesFromIndex(self.getCenterOfGravityIndex())
         return center_gravity_coordinate
 
     def dilateRadius(self,radius=2):
@@ -1244,14 +1267,7 @@ class Roiable(Imaginable):
         mask[np.where(mask>0)]=1
         self.setImageFromNumpy(mask)
         return self
-    def getBoundingBox(self):
-        N=self.getImageAsNumpy()
-        roi_indices = np.argwhere(N == 1)
-        min_coords = np.min(roi_indices, axis=0)
-        max_coords = np.max(roi_indices, axis=0)
-        bounding_box = (min_coords, max_coords)
-        return bounding_box
-
+    
 
 
 
@@ -1266,8 +1282,35 @@ class LabelMapable(Imaginable):
     def noNearestNeighborExtrapolator(self):
         self.dfltuseNearestNeighborExtrapolator=False
         return self
+    def getCenterOfGravityIndexPerLabel(self):
+        label_statistic = sitk.LabelIntensityStatisticsImageFilter()
+        label_statistic.Execute(self.getImage())
+
+        centers_gravity = {}
+        for label in label_statistic.GetLabels():
+            centers_gravity[label] = label_statistic.GetCenterOfGravity(label)
+        
+        return centers_gravity
+    def getCenterOfGravityIndex(self):
+        centers_gravity = self.getCenterOfGravityIndex()
+        
+        center_of_all = np.mean(list(centers_gravity.values()), axis=0)
+
+        return center_of_all
+ 
+    
+    def  getCenterOfGravitygetCenterOfGravityCoordinates(self):
+        center_gravity_coordinate = self.getCoordinatesFromIndex(self.getCenterOfGravityIndex())
+        return center_gravity_coordinate
+
 
 class LabelMapableROI(LabelMapable):
+    """Old class for Labelmapable
+    will be removed in the future
+    use LabelMapable instead
+    Args:
+        LabelMapable (_type_): _description_
+    """
     def __init__(self, filename=None, image=None, verbose=False,labelsvalues=None):
         super().__init__(filename, image, verbose)
         self.dfltInterpolator=sitk.sitkNearestNeighbor
