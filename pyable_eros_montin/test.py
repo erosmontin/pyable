@@ -1,35 +1,39 @@
-from pyable_eros_montin.imaginable import *
+import unittest
+import SimpleITK as sitk
+import numpy as np
+import imaginable as ima
+class TestImaginable(unittest.TestCase):
+    def setUp(self):
+        # Create a test image
+        self.one3D_size = (11, 11, 9)
+        self.one3D = np.ones(self.one3D_size)
+        self.labelmappable = ima.LabelMapable()
+        self.labelmappable.setImageFromNumpy(self.one3D)
+        self.imaginable = ima.Imaginable()
+        self.imaginable.setImageFromNumpy(self.one3D)
+        self.roiable = ima.Roiable()
+        self.roiable.setImageFromNumpy(self.one3D)
+        
+    def test_Labelmappable_getCenterOfGravityIndex(self):
+        center_gravity = self.labelmappable.getCenterOfGravityIndex()
+        self.assertTrue(np.array_equal(center_gravity, np.array(self.one3D_size) // 2))
+        
 
-A=SITKImaginable(filename='data/t.nii.gz')
+    def test_Roiable_getCenterOfGravityIndex(self):
+        center_gravity = self.roiable.getCenterOfGravityIndex()
+        self.assertTrue(np.array_equal(center_gravity, np.array(self.one3D_size) // 2))
 
-A.printImageInfo()
+    
+    def test_Labelmappable_getCenteroid(self):
+        center= self.labelmappable.getCenteroidIndex()
+        self.assertTrue(np.array_equal(center, np.array(self.one3D_size) // 2))
 
-
-B=A.getDuplicate()
-
-B.changeImageSpacing([5,5,5])
-B.changeImageOrigin([0,55,5])
-
-print(A.getVoxelVolume())
-print(B.getVoxelVolume())
-B.undo()
-B.changeImageSize([50,50,50],sitk.sitkBSpline)
-B.cropImage([0,0,0],[40,40,40])
-
-B.writeImageAs('/data/sa.nii.gz')
-B.whathappened()
-
-A.translateImage([5,0,0])
-A.writeImageAs('/data/tt.nii.gz')
-A.rotateImage([5,0,0])
-A.writeImageAs('/data/tr.nii.gz')
-A.scaleImage([0.8,0,0])
-A.writeImageAs('/data/ts.nii.gz')
-A.undo()
-A.writeImageAs('/data/tr2.nii.gz')
-A.cast(float)
-
-A.whathappened()
-
-
-
+    def test_Roiable_getCenteroid(self):
+        center= self.roiable.getCenteroidIndex()
+        self.assertTrue(np.array_equal(center, np.array(self.one3D_size) // 2))
+                
+if __name__ == '__main__':
+    print("\n\n\n")
+    print("***************************DA TEST************************************")
+    print("\n\n\n")
+    unittest.main(verbosity=2)

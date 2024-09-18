@@ -1219,15 +1219,46 @@ class Roiable(Imaginable):
             self.setImage(self.getImage()==roivalue,'now the mask is equal to one')
 
     def getCenterOfGravityIndex(self):
+        """
+        Get the center of gravity of the ROI
+        Returns:
+            _type_: _description_
+        """
+        label_image = sitk.Cast(self.getImage(), sitk.sitkInt32)
+        feature_image = self.getImage()
         label_statistic = sitk.LabelIntensityStatisticsImageFilter()
-        label_statistic.Execute(self.getImage())
-        center_gravity = label_statistic.GetCenterGravity(1)
+        label_statistic.Execute(label_image, feature_image)
+        center_gravity = label_statistic.GetCenterOfGravity(1)
+        return center_gravity
+
+    def getCenteroidIndex(self):
+        """
+        Get the centeroid of the ROI
+        Returns:
+            _type_: _description_
+        """
+        label_image = sitk.Cast(self.getImage(), sitk.sitkInt32)
+        feature_image = self.getImage()
+        label_statistic = sitk.LabelIntensityStatisticsImageFilter()
+        label_statistic.Execute(label_image, feature_image)
+        center_gravity = label_statistic.GetCentroid(1)
         return center_gravity
     
     def  getCenterOfGravityCoordinates(self):
+        """
+        Get the center of gravity of the ROI
+        Returns:
+            _type_: _description_
+        """
         center_gravity_coordinate = self.getCoordinatesFromIndex(self.getCenterOfGravityIndex())
         return center_gravity_coordinate
 
+    def getCenteroidCoordinates(self):
+        """
+        Get the centeroid of the ROI
+        """
+        centeroid_coordinate = self.getCoordinatesFromIndex(self.getCenteroidIndex())
+        return centeroid_coordinate
     def dilateRadius(self,radius=2):
         return self.__derodeRadius__(radius,False)
     def erodeRadius(self,radius=2):
@@ -1283,16 +1314,28 @@ class LabelMapable(Imaginable):
         self.dfltuseNearestNeighborExtrapolator=False
         return self
     def getCenterOfGravityIndexPerLabel(self):
+        """
+        Get the center of gravity of the labelmap per label
+        Returns:
+            _type_: _description_
+        """
+        label_image = sitk.Cast(self.getImage(), sitk.sitkInt32)
+        feature_image = self.getImage()
         label_statistic = sitk.LabelIntensityStatisticsImageFilter()
-        label_statistic.Execute(self.getImage())
-
+        label_statistic.Execute(label_image, feature_image)
+        
         centers_gravity = {}
         for label in label_statistic.GetLabels():
             centers_gravity[label] = label_statistic.GetCenterOfGravity(label)
         
         return centers_gravity
     def getCenterOfGravityIndex(self):
-        centers_gravity = self.getCenterOfGravityIndex()
+        """
+        Get the center of gravity of the labelmap
+        Returns:
+            _type_: _description_
+        """
+        centers_gravity = self.getCenterOfGravityIndexPerLabel()
         
         center_of_all = np.mean(list(centers_gravity.values()), axis=0)
 
@@ -1303,6 +1346,38 @@ class LabelMapable(Imaginable):
         center_gravity_coordinate = self.getCoordinatesFromIndex(self.getCenterOfGravityIndex())
         return center_gravity_coordinate
 
+    def getCenteroidIndexPerLabel(self):
+        """
+        Get the centeroid of the labelmap per label
+        Returns:
+            _type_: _description_
+        """
+        label_image = sitk.Cast(self.getImage(), sitk.sitkInt32)
+        feature_image = self.getImage()
+        label_statistic = sitk.LabelIntensityStatisticsImageFilter()
+        label_statistic.Execute(label_image, feature_image)
+        
+        centers = {}
+        for label in label_statistic.GetLabels():
+            centers[label] = label_statistic.GetCentroid(label)
+        
+        return centers
+    
+    def getCenteroidIndex(self):
+        """ 
+        Get the centeroid of the labelmap
+
+        Returns:
+            _type_: _description_
+        """
+        centers = self.getCenteroidIndexPerLabel()
+        center_of_all = np.mean(list(centers.values()), axis=0)
+        return center_of_all
+    
+    def getCenteroidCoordinates(self):
+        centeroid_coordinate = self.getCoordinatesFromIndex(self.getCenteroidIndex())
+        
+        
 
 class LabelMapableROI(LabelMapable):
     """Old class for Labelmapable
