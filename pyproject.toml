@@ -10,7 +10,7 @@ include = ["**/*.py"]
 
 [project]
 name = "pyable_eros_montin"
-version = "0.1.2"
+version = "0.1.2.1"
 authors = [
   { name="Dr. Eros Montin, PhD", email="eros.montin@gmail.com" },
 ]
@@ -18,7 +18,7 @@ description = "Handy things you need for image analysis, at least I do."
 readme = "README.md"
 requires-python = ">=3.6"
 
-dependencies = ["numpy","pynico_eros_montin @ git+https://github.com/erosmontin/pynico.git","simpleitk>2.0","matplotlib","scikit-image"]
+dependencies = ["numpy","pynico_eros_montin @ git+https://github.com/erosmontin/pynico.git","simpleitk>2.0","matplotlib","scikit-image","vtk"]
 
 classifiers = [
     "Programming Language :: Python :: 3",
