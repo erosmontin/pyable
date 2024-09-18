@@ -31,7 +31,12 @@ class TestImaginable(unittest.TestCase):
     def test_Roiable_getCentroid(self):
         center= self.roiable.getCentroidIndex()
         self.assertTrue(np.array_equal(center, np.array(self.one3D_size) // 2))
-                
+    
+    def test_getBoundingBox(self):
+        "Test for getBoundingBox method"
+        bounding_box = self.imaginable.getBoundingBox()
+        print(bounding_box )
+        self.assertTrue(np.array_equal(bounding_box, np.array(((0, 0, 0), [f-1 for f in self.one3D_size]))))
 if __name__ == '__main__':
     print("\n\n\n")
     print("***************************DA TEST************************************")
