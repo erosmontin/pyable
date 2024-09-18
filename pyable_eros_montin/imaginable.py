@@ -1212,7 +1212,7 @@ class Roiable(Imaginable):
         if roivalue:
             self.setImage(self.getImage()==roivalue,'now the mask is equal to one')
 
-    def getCenterOfGravityIndex(self):
+    def getCenterOfGravityCoordinates(self):
         """
         Get the center of gravity of the ROI
         Returns:
@@ -1225,7 +1225,7 @@ class Roiable(Imaginable):
         center_gravity = label_statistic.GetCenterOfGravity(1)
         return center_gravity
 
-    def getCentroidIndex(self):
+    def getCentroidCoordinates(self):
         """
         Get the Centroid of the ROI
         Returns:
@@ -1238,20 +1238,20 @@ class Roiable(Imaginable):
         center_gravity = label_statistic.GetCentroid(1)
         return center_gravity
     
-    def  getCenterOfGravityCoordinates(self):
+    def  getCenterOfGravityIndex(self):
         """
         Get the center of gravity of the ROI
         Returns:
             _type_: _description_
         """
-        center_gravity_coordinate = self.getCoordinatesFromIndex(self.getCenterOfGravityIndex())
-        return center_gravity_coordinate
+        center = self.getIndexFromCoordinates(self.getCenterOfGravityCoordinates())
+        return center
 
-    def getCentroidCoordinates(self):
+    def getCentroidIndex(self):
         """
         Get the Centroid of the ROI
         """
-        Centroid_coordinate = self.getCoordinatesFromIndex(self.getCentroidIndex())
+        Centroid_coordinate = self.getIndexFromCoordinates(self.getCentroidCoordinates())
         return Centroid_coordinate
     def dilateRadius(self,radius=2):
         return self.__derodeRadius__(radius,False)
@@ -1307,7 +1307,7 @@ class LabelMapable(Imaginable):
     def noNearestNeighborExtrapolator(self):
         self.dfltuseNearestNeighborExtrapolator=False
         return self
-    def getCenterOfGravityIndexPerLabel(self):
+    def getCenterOfGravityCoordinatesPerLabel(self):
         """
         Get the center of gravity of the labelmap per label
         Returns:
@@ -1323,24 +1323,24 @@ class LabelMapable(Imaginable):
             centers_gravity[label] = label_statistic.GetCenterOfGravity(label)
         
         return centers_gravity
-    def getCenterOfGravityIndex(self):
+    def getCenterOfGravityCoordinates(self):
         """
         Get the center of gravity of the labelmap
         Returns:
             _type_: _description_
         """
-        centers_gravity = self.getCenterOfGravityIndexPerLabel()
+        centers_gravity = self.getCenterOfGravityCoordinatesPerLabel()
         
         center_of_all = np.mean(list(centers_gravity.values()), axis=0)
 
         return center_of_all
  
     
-    def  getCenterOfGravitygetCenterOfGravityCoordinates(self):
-        center_gravity_coordinate = self.getCoordinatesFromIndex(self.getCenterOfGravityIndex())
-        return center_gravity_coordinate
+    def  getCenterOfGravitygetCenterOfGravityIndex(self):
+        center = self.getIndexFromCoordinates(self.getCenterOfGravityCoordinates())
+        return center
 
-    def getCentroidIndexPerLabel(self):
+    def getCentroidCoordinatesPerLabel(self):
         """
         Get the Centroid of the labelmap per label
         Returns:
@@ -1357,20 +1357,24 @@ class LabelMapable(Imaginable):
         
         return centers
     
-    def getCentroidIndex(self):
+    def getCenterOfGravityIndex(self):
+        center = self.getIndexFromCoordinates(self.getCenterOfGravityCoordinates())
+        return center
+    
+    def getCentroidCoordinates(self):
         """ 
         Get the Centroid of the labelmap
 
         Returns:
             _type_: _description_
         """
-        centers = self.getCentroidIndexPerLabel()
+        centers = self.getCentroidCoordinatesPerLabel()
         center_of_all = np.mean(list(centers.values()), axis=0)
         return center_of_all
     
-    def getCentroidCoordinates(self):
-        Centroid_coordinate = self.getCoordinatesFromIndex(self.getCentroidIndex())
-        return Centroid_coordinate
+    def getCentroidIndex(self):
+        Centroid = self.getIndexFromCoordinates(self.getCentroidCoordinates())
+        return Centroid
         
 
 class LabelMapableROI(LabelMapable):
