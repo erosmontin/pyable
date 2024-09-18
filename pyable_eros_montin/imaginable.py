@@ -983,14 +983,8 @@ class Imaginable:
             _type_: _description_
         """
         N=self.getImageAsNumpy()
-        mask = ~np.isin(N, exclude)
-
-        # Apply the mask to the array
-        N_masked = N[mask]
-
-        # Find the indices of the non-zero elements
-        roi_indices = np.argwhere(N_masked)
-
+        mask = np.isin(N, exclude,invert=True)
+        roi_indices = np.argwhere(mask)
         min_coords = np.min(roi_indices, axis=0)
         max_coords = np.max(roi_indices, axis=0)
         bounding_box = (min_coords, max_coords)
@@ -1231,9 +1225,9 @@ class Roiable(Imaginable):
         center_gravity = label_statistic.GetCenterOfGravity(1)
         return center_gravity
 
-    def getCenteroidIndex(self):
+    def getCentroidIndex(self):
         """
-        Get the centeroid of the ROI
+        Get the Centroid of the ROI
         Returns:
             _type_: _description_
         """
@@ -1253,12 +1247,12 @@ class Roiable(Imaginable):
         center_gravity_coordinate = self.getCoordinatesFromIndex(self.getCenterOfGravityIndex())
         return center_gravity_coordinate
 
-    def getCenteroidCoordinates(self):
+    def getCentroidCoordinates(self):
         """
-        Get the centeroid of the ROI
+        Get the Centroid of the ROI
         """
-        centeroid_coordinate = self.getCoordinatesFromIndex(self.getCenteroidIndex())
-        return centeroid_coordinate
+        Centroid_coordinate = self.getCoordinatesFromIndex(self.getCentroidIndex())
+        return Centroid_coordinate
     def dilateRadius(self,radius=2):
         return self.__derodeRadius__(radius,False)
     def erodeRadius(self,radius=2):
@@ -1346,9 +1340,9 @@ class LabelMapable(Imaginable):
         center_gravity_coordinate = self.getCoordinatesFromIndex(self.getCenterOfGravityIndex())
         return center_gravity_coordinate
 
-    def getCenteroidIndexPerLabel(self):
+    def getCentroidIndexPerLabel(self):
         """
-        Get the centeroid of the labelmap per label
+        Get the Centroid of the labelmap per label
         Returns:
             _type_: _description_
         """
@@ -1363,20 +1357,20 @@ class LabelMapable(Imaginable):
         
         return centers
     
-    def getCenteroidIndex(self):
+    def getCentroidIndex(self):
         """ 
-        Get the centeroid of the labelmap
+        Get the Centroid of the labelmap
 
         Returns:
             _type_: _description_
         """
-        centers = self.getCenteroidIndexPerLabel()
+        centers = self.getCentroidIndexPerLabel()
         center_of_all = np.mean(list(centers.values()), axis=0)
         return center_of_all
     
-    def getCenteroidCoordinates(self):
-        centeroid_coordinate = self.getCoordinatesFromIndex(self.getCenteroidIndex())
-        
+    def getCentroidCoordinates(self):
+        Centroid_coordinate = self.getCoordinatesFromIndex(self.getCentroidIndex())
+        return Centroid_coordinate
         
 
 class LabelMapableROI(LabelMapable):

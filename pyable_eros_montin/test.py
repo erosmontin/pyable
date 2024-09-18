@@ -24,12 +24,12 @@ class TestImaginable(unittest.TestCase):
         self.assertTrue(np.array_equal(center_gravity, np.array(self.one3D_size) // 2))
 
     
-    def test_Labelmappable_getCenteroid(self):
-        center= self.labelmappable.getCenteroidIndex()
+    def test_Labelmappable_getCentroid(self):
+        center= self.labelmappable.getCentroidIndex()
         self.assertTrue(np.array_equal(center, np.array(self.one3D_size) // 2))
 
-    def test_Roiable_getCenteroid(self):
-        center= self.roiable.getCenteroidIndex()
+    def test_Roiable_getCentroid(self):
+        center= self.roiable.getCentroidIndex()
         self.assertTrue(np.array_equal(center, np.array(self.one3D_size) // 2))
                 
 if __name__ == '__main__':
