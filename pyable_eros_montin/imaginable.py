@@ -628,7 +628,30 @@ class Imaginable:
         mess=f"Image resized from {image.GetSize()} - {image.GetSpacing()} to {newSize} - {reference_spacing}"
         self.setImage(sitk.Resample(image, newSize, transform,  interpolator, reference_origin, reference_spacing, reference_direction, bgvalue,image.GetPixelIDValue(),useNearestNeighborExtrapolator),mess)
         return self
-    
+    def padImage(self,lower_padding,upper_padding,padding_value=0):
+        """
+        Pad an image with a constant value.
+
+        Args:
+            lower_padding (_type_): _description_
+            upper_padding (_type_): _description_
+            padding_value (_type_, optional): _description_. Defaults to 0.
+        Returns:
+            _type_: _description_
+        """
+        image=self.getImage()
+        # Create a padding filter
+        padding_filter = sitk.ConstantPadImageFilter()
+
+        # Set the padding sizes for each dimension
+        padding_filter.SetPadLowerBound(lower_padding)  # Lower padding
+        padding_filter.SetPadUpperBound(upper_padding)  # Upper padding
+
+        padding_filter.SetConstant(padding_value)
+
+        # Apply the padding filter to the image
+        self.setImage(padding_filter.Execute(image),f'image padded by {lower_padding} and {upper_padding} with constant {padding_value}')
+        return  self        
     def cropImage(self,lowerB,upperB,coordinates=None):
         PP="voxels"
         image=self.getImage()
@@ -1433,11 +1456,12 @@ class LabelMapableROI(LabelMapable):
 #     def toVtk(self):
 #         return sitk2vtk(self.getImage(), debugOn=False)
 if __name__=="__main__":
-    A=Imaginable('/data/MYDATA/fulldixon-images/C-4/data/wo.nii')
-    A.sharpen()
-    A.denoise(numberOfIterations=10,stencilRadius=50)
+    A=Imaginable('/data/MYDATA/CARTILAGE_HIP/images/wo.nii')
+    A.padImage([10,20,50],[10,10,50])
     A.writeImageAs('/g/a.nii')
- 
+    
+    
+    
 
 
     # A=Imaginable('/data/MYDATA/fulldixon-images/C-4/data/IN.nii')

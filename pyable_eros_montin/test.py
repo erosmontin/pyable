@@ -41,6 +41,17 @@ class TestImaginable(unittest.TestCase):
         bounding_box = self.imaginable.getBoundingBox()
         print(bounding_box )
         self.assertTrue(np.array_equal(bounding_box, np.array(((0, 0, 0), [f-1 for f in self.one3D_size]))))
+    
+    def test_padImage(self):
+        "Test for padImage method"
+        lower_padding = (1, 1, 1)
+        upper_padding = (1, 1, 1)
+        padding_value = 0
+        self.imaginable.padImage(lower_padding, upper_padding, padding_value)
+        padded_image = self.imaginable.getImage()
+        # Assuming the original image is of size (10, 10, 10), after padding, it should be (12, 12, 12)
+        OUTPUT_SIZE = self.one3D_size + np.array(lower_padding) + np.array(upper_padding)
+        self.assertEqual(padded_image.GetSize(), tuple(OUTPUT_SIZE))
 if __name__ == '__main__':
     print("\n\n\n")
     print("***************************DA TEST************************************")
