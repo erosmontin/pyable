@@ -1448,10 +1448,37 @@ class LabelMapableROI(LabelMapable):
         self.setImageFromNumpy(LABELMAP,refimage=super().getImage())
         return self
 
+class Fieldable(Imaginable):
+    def __init__(self, filename=None, image=None, verbose=False):
+        super().__init__(filename, image, verbose)
+        self.dfltInterpolator=sitk.sitkNearestNeighbor
+        self.dfltuseNearestNeighborExtrapolator=False
 
+    def setImageFromNumpy(self,nparray,refimage=None, spacing=None,origin=None,direction=None):
+        vector=True
+        L=list(range(len(nparray.shape)))
+        L.reverse()
+        o=np.transpose(nparray, L)
+        self.setImageFromNumpyZYX(o,refimage, vector,spacing,origin,direction)
+        return self
 
-
-
+    def setImageFromNumpyZYX(self,nparray,refimage=None,spacing=None,origin=None,direction=None):
+        vector=True
+        nda=sitk.GetImageFromArray(nparray, isVector=vector)
+        if refimage:
+            REF=getmeTheSimpleITKImage(refimage)
+            if np.array_equiv(REF.GetSize(),nparray.shape):
+                nda.CopyInformation(REF)
+            else:
+                nda=setSITKImageInforFromImage(nda,REF)
+        elif ((spacing) and (origin) and (direction) ):
+            nda=setSITKImageInfo(nda,spacing=spacing,origin=origin,direction=direction)
+        elif self.isImageSet():
+            if(self.getImage()):
+                r,o,d=getSITKImageInfo(getmeTheSimpleITKImage(self))
+                nda=setSITKImageInfo(nda,spacing=r,origin=o,direction=d)            
+        self.setImage(nda,'image set as numpy array ZYX!!')
+    
 
 #     def toVtk(self):
 #         return sitk2vtk(self.getImage(), debugOn=False)
