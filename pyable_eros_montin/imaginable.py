@@ -587,6 +587,17 @@ class Imaginable:
         return PP
             
     def resampleOnTargetImage(self,target,interpolator = None,default_value = 0,useNearestNeighborExtrapolator=None):
+        """Resample the image on a target image
+
+        Args:
+            target (_type_): _description_
+            interpolator (_type_, optional): _description_. Defaults to None.
+            default_value (int, optional): _description_. Defaults to 0.
+            useNearestNeighborExtrapolator (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
         target=getmeTheSimpleITKImage(target)
         if interpolator == None:
             interpolator = self.dfltInterpolator
@@ -596,9 +607,16 @@ class Imaginable:
             default_value=0.0
         theT =sitk.Transform()
         theT.SetIdentity()
-        self.setImage(sitk.Resample(self.getImage(),target,theT,interpolator,default_value,sitk.sitkUnknown,useNearestNeighborExtrapolator),'resampled on target image')
-    
-
+        #check if the pixeltype is complex
+        if (self.getImagePixelTypeAsID() == sitk.sitkComplexFloat32) or (self.getImagePixelTypeAsID() == sitk.sitkComplexFloat64):
+            real_image = sitk.ComplexToReal(self.getImage())
+            imag_image = sitk.ComplexToImaginary(self.getImage())
+            re=sitk.Resample(real_image,target,theT,interpolator,default_value,sitk.sitkUnknown,useNearestNeighborExtrapolator)
+            im=sitk.Resample(imag_image,target,theT,interpolator,default_value,sitk.sitkUnknown,useNearestNeighborExtrapolator)
+            self.setImage(sitk.RealAndImaginaryToComplex(re, im),'resampled on target image')
+        else:            
+            self.setImage(sitk.Resample(self.getImage(),target,theT,interpolator,default_value,sitk.sitkUnknown,useNearestNeighborExtrapolator),'resampled on target image')
+        return self
     def getCoordinatesFromIndex(self,P):
         image=self.getImage()
         return image.TransformContinuousIndexToPhysicalPoint(P)
