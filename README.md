@@ -31,8 +31,6 @@ pip install git+https://github.com/erosmontin/pyable.git
 ## versions:
 - 0.2.0 (Oct, 24)
     - Fieldable
-- 0.1.1 (Sept, 24)
-    - 
 - 0.1.0.6 (May, 24)
     - LabelMap are Imaginable with interpolator = sitkNearestNeighbor and dfltuseNearestNeighborExtrapolator=True 
 
