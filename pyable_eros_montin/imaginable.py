@@ -442,8 +442,21 @@ class Imaginable:
         
         return overlayNumpyImageAndNumpyLabelmap(im.T, im2.T, image_cmap=image_cmap,labelmap_cmap=labelmap_cmap,alpha_value=alpha_value,image_vmax=image_vmax,image_vmin=image_vmin,labelmap_vmax=labelmap_vmax,labelmap_vmin=labelmap_vmin,show=show,save=save,title=title,labelmap_name=labelmap_name)
 
-    
 
+    def filterValues(self,values):
+        C=self.getDuplicate()
+        C=C.getImage()
+        for s in values:
+            m=L.getImage()==s
+            C+=m*s
+        return self.setImage(C)
+    
+    def cropToBoundingBox(self):
+        BL,BU=self.getBoundingBox()
+        BL=[int(a) for a in BL]
+        BU=[int(a) for a in BU]
+        return self.cropImage(BL,BU)
+    
     def resampleOnCanonicalSpace(self):
         return self.dicomOrient('LPS')
     
