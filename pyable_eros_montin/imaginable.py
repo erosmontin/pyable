@@ -15,6 +15,46 @@ except:
         from pyable_eros_montin.utils import *
         
 from skimage import data, filters, measure, morphology
+import itertools
+def get_image_corners_nd(image):
+    """
+    Get the corner pixel values of an n-dimensional SimpleITK image.
+
+    Parameters:
+    - image: A SimpleITK image of any dimension.
+
+    Returns:
+    - A dictionary with the corner coordinates as keys and pixel values as values.
+    """
+    # Ensure the image is not null
+    if image is None:
+        raise ValueError("The input image is None.")
+    
+    # Get the size of the image (size per dimension)
+    size = image.GetSize()
+    
+    # Generate all corner coordinates by creating combinations of (0 or max index) for each dimension
+    corners = list(itertools.product(*[(0, s-1) for s in size]))
+  
+    return corners
+
+def get_image_corners_coordinates(image):
+    """
+    Get the corner coordinates of an n-dimensional SimpleITK image.
+
+    Parameters:
+    - image: A SimpleITK image of any dimension.
+
+    Returns:
+    - A list of corner coordinates.
+    """
+    # Ensure the image is not null
+    if image is None:
+        raise ValueError("The input image is None.")
+    corners=[]
+    for c in get_image_corners_nd(image):
+       corners.append(image.TransformIndexToPhysicalPoint(c))
+    return corners
 
 def dcm2niixFieldsToJson(fn,field_list=["RepetitionTime","FlipAngle","MagneticFieldStrength","ScanningSequence","NonlinearGradientCorrection","SliceThickness","SpacingBetweenSlices","SAR","EchoTime","RepetitionTime","SpoilingState","FlipAngle","PartialFourier","TxRefAmp","PixelBandwidth","PatientPosition","MRAcquisitionType","ImagingFrequency","ScanOptions"]):
     """
@@ -304,10 +344,10 @@ class Imaginable:
         while self.imageStack.size()>1:
             self.undo()
     def isImaginableInTheSameSpace(self,image):
-        return ((self.getImageSize() != image.getImageSize()) or
-             (self.getImageDirection() != image.getImageDirection()) or
-             (self.getImageOrigin() != image.getImageOrigin()) or
-               (self.getImageSpacing() != image.getImageSpacing() ))
+        return ((self.getImageSize() == image.getImageSize()) and
+             (self.getImageDirection() == image.getImageDirection()) and
+             (self.getImageOrigin() == image.getImageOrigin()) and
+               (self.getImageSpacing() == image.getImageSpacing() ))
     
     def undo(self):
         if self.imageStack.size()>1:
@@ -404,18 +444,9 @@ class Imaginable:
 
     
 
-    def resampleOnCanonicalSpace(self,interpolator=None,useNearestNeighborExtrapolator=None,bgvalue=0.0):
-        if interpolator == None:
-            interpolator = self.dfltInterpolator
-        if useNearestNeighborExtrapolator ==None:
-            useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator
-
-        
-        t=sitk.Transform()
-        t.SetIdentity()
-        mess='to canonical'
-        self.setImage(sitk.Resample(self.getImage(), self.getImageSize(), t,  interpolator, self.getImageOrigin(), self.getImageSpacing(), np.eye(3).flatten(), bgvalue,self.getImagePixelTypeAsID(),useNearestNeighborExtrapolator),mess)
-
+    def resampleOnCanonicalSpace(self):
+        return self.dicomOrient('LPS')
+    
     def setImageFromNumpy(self,nparray,refimage=None, vector=False,spacing=None,origin=None,direction=None):
         L=list(range(len(nparray.shape)))
         L.reverse()
@@ -951,7 +982,10 @@ class Imaginable:
             raise Exception("Can't {message}")
         return self
     
-    
+    def getCornersCoordinates(self):
+        
+        return get_image_corners_coordinates(self.getImage())
+        
     def isInsidePoint(self,P):
         size=self.getImageSize()
         V=self.getIndexFromCoordinates(P)
