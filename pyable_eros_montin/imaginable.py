@@ -444,8 +444,9 @@ class Imaginable:
 
 
     def filterValues(self,values):
-        C=self.getDuplicate()
-        C=C.getImage()
+        L=self.getDuplicate()
+        C=sitk.Image(L.getImage())
+        C=C*0
         for s in values:
             m=L.getImage()==s
             C+=m*s
