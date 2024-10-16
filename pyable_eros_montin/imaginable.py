@@ -315,23 +315,6 @@ class Imaginable:
     def getValuesInRoi(self,roi):
         return getMaskedNunmpyArray(self,roi)
     
-    # def getWavelet(self,wtype='Haar'):
-    #     WT=uwlt(self.getImageAsNumpy(),wtype)
-    #     NS=[g*2 for g in self.getImageSpacing()]
-    #     O=[]
-    #     #this seems to be an offset at least for haar
-    #     Z=[0]*self.getImageDimension()
-    #     U=[0]*self.getImageDimension()
-    #     T=[(o-z)/2 for z,o in zip(self.getCoordinatesFromIndex(Z),self.getCoordinatesFromIndex(U))]
-    #     for t in WT.keys():
-    #         K=numpyToImaginable(WT[t],self)
-    #         K.setImageSpacing(NS)
-    #         K.translateImage(T)
-    #         O.append({"type":type(self),
-    #                 "name":t,
-    #                 "map":K.getDuplicate()
-    #         })
-    #     return O
     def getImage(self):
         return self.imageStack.peek()
 
