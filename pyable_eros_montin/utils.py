@@ -194,6 +194,114 @@ if __name__=="__main__":
 #     # A = np.random.rand(3, n)
 #     # B = NEW@A + t
 
-#     # ret_R, ret_t = rigid_transform_3D(A, B)
-#     # print(ret_R)
-#     # print(ret_t)
+    #     # ret_R, ret_t = rigid_transform_3D(A, B)
+    #     # print(ret_R)
+    #     # print(ret_t)
+
+
+import glob
+import pandas as pd
+import os
+
+def processImageDirectory(directory, processor_func, file_pattern='*.nii.gz', 
+                         output_csv=None, recursive=True, verbose=False):
+    """
+    Batch process images in a directory with a processor function.
+    
+    Walks through directory, applies processor_func to each matching image,
+    aggregates results to pandas DataFrame and optionally exports to CSV.
+    
+    Args:
+        directory (str): Root directory to search
+        processor_func (callable): Function that takes (Imaginable) -> dict
+                                  The dict should contain results to aggregate
+        file_pattern (str): Glob pattern for files. Default: '*.nii.gz'
+                           Examples: '*.nii.gz', '*.nii', '*.img'
+        output_csv (str, optional): Path to save results as CSV. If None, no export.
+        recursive (bool): Search recursively in subdirectories. Default: True
+        verbose (bool): Print debug information. Default: False
+        
+    Returns:
+        pd.DataFrame: Results with one row per processed image
+                     'filepath' column contains the file path
+                     Other columns from processor_func output
+                     
+    Example:
+        >>> def process_img(img):
+        ...     # img is an Imaginable object
+        ...     return {
+        ...         'size': img.getImageSize(),
+        ...         'spacing': img.getImageSpacing(),
+        ...         'num_pixels': np.prod(img.getImageSize())
+        ...     }
+        >>> 
+        >>> results = processImageDirectory(
+        ...     '/data/images', 
+        ...     process_img,
+        ...     file_pattern='*.nii.gz',
+        ...     output_csv='/output/results.csv',
+        ...     verbose=True
+        ... )
+        >>> print(results.head())
+    """
+    if not os.path.isdir(directory):
+        raise ValueError(f"Directory does not exist: {directory}")
+    
+    # Find all matching files
+    if recursive:
+        search_pattern = os.path.join(directory, '**', file_pattern)
+        files = glob.glob(search_pattern, recursive=True)
+    else:
+        search_pattern = os.path.join(directory, file_pattern)
+        files = glob.glob(search_pattern, recursive=False)
+    
+    if len(files) == 0:
+        if verbose:
+            print(f"No files matching '{file_pattern}' found in {directory}")
+        return pd.DataFrame()
+    
+    if verbose:
+        print(f"Found {len(files)} files matching '{file_pattern}'")
+    
+    # Process each file
+    results = []
+    for i, filepath in enumerate(files):
+        try:
+            if verbose:
+                print(f"[{i+1}/{len(files)}] Processing: {filepath}")
+            
+            # Load image as Imaginable
+            img = ima.Imaginable(filepath)
+            
+            # Apply processor function
+            result = processor_func(img)
+            
+            # Add filepath to result
+            if isinstance(result, dict):
+                result['filepath'] = filepath
+                results.append(result)
+            else:
+                if verbose:
+                    print(f"  Warning: processor returned non-dict type {type(result)}")
+                continue
+                
+        except Exception as e:
+            if verbose:
+                print(f"  Error processing {filepath}: {e}")
+            continue
+    
+    # Convert to DataFrame
+    df = pd.DataFrame(results)
+    
+    if verbose:
+        print(f"Successfully processed {len(df)} files")
+        print(f"Columns: {list(df.columns)}")
+    
+    # Export to CSV if requested
+    if output_csv:
+        os.makedirs(os.path.dirname(os.path.abspath(output_csv)), exist_ok=True)
+        df.to_csv(output_csv, index=False)
+        if verbose:
+            print(f"Results saved to: {output_csv}")
+    
+    return df

@@ -624,6 +624,158 @@ class TimeSeriesPlotter(PlotViewer):
 
 
 # ============================================================================
+# GRIDPLOTTER - Multi-Slice Grid Viewer
+# ============================================================================
+
+class GridPlotter:
+    """
+    Display multiple 2D slices in a grid layout.
+    
+    Useful for quick visual inspection of representative slices from a 3D volume,
+    or for displaying results from extractRepresentativeSlices().
+    
+    Supports:
+    - Customizable grid dimensions (rows × columns)
+    - Individual slice titles and colormaps
+    - Shared colorbar
+    - Overlay support for each slice
+    
+    Attributes
+    ----------
+    fig : matplotlib.figure.Figure
+        Figure object
+    axes : np.ndarray
+        Grid of axes
+    """
+    
+    def __init__(self, figsize: Tuple[int, int] = (12, 10)):
+        """
+        Initialize GridPlotter.
+        
+        Parameters
+        ----------
+        figsize : tuple, default=(12, 10)
+            Figure size in inches (width, height)
+        """
+        self.figsize = figsize
+        self.fig = None
+        self.axes = None
+    
+    def show_grid(self, slices: List[np.ndarray], 
+                  rows: Optional[int] = None, cols: Optional[int] = None,
+                  titles: Optional[List[str]] = None,
+                  cmap: str = 'gray', vmin: Optional[float] = None, 
+                  vmax: Optional[float] = None, overlays: Optional[List[np.ndarray]] = None,
+                  cmap_overlay: str = 'hot', alpha_overlay: float = 0.5):
+        """
+        Display slices in a grid layout.
+        
+        Parameters
+        ----------
+        slices : list of np.ndarray
+            List of 2D arrays to display
+        rows : int, optional
+            Number of rows in grid (auto-calculated if None)
+        cols : int, optional
+            Number of columns in grid (auto-calculated if None)
+        titles : list of str, optional
+            Title for each slice. If None, uses "Slice 0", "Slice 1", etc.
+        cmap : str, default='gray'
+            Colormap for slices
+        vmin : float, optional
+            Minimum value for colormap (auto-computed if None)
+        vmax : float, optional
+            Maximum value for colormap (auto-computed if None)
+        overlays : list of np.ndarray, optional
+            Optional overlay arrays (one per slice)
+        cmap_overlay : str, default='hot'
+            Colormap for overlays
+        alpha_overlay : float, default=0.5
+            Opacity of overlays (0-1)
+            
+        Example
+        -------
+        >>> img = Imaginable('mri_scan.nii.gz')
+        >>> result = img.extractRepresentativeSlices(planes='all', offsets=[-5, 0, 5])
+        >>> slices = result['slices']
+        >>> labels = [f"{name} ({offset}mm)" for name, offset in result['plane_names']]
+        >>> 
+        >>> grid = GridPlotter()
+        >>> grid.show_grid(slices, titles=labels)
+        """
+        n_slices = len(slices)
+        
+        # Auto-calculate grid dimensions
+        if rows is None or cols is None:
+            cols = min(3, n_slices)  # Default 3 columns
+            rows = int(np.ceil(n_slices / cols))
+        
+        # Create figure
+        self.fig, self.axes = plt.subplots(rows, cols, figsize=self.figsize)
+        
+        # Flatten axes for easier indexing
+        if rows == 1 and cols == 1:
+            axes_flat = [self.axes]
+        elif rows == 1 or cols == 1:
+            axes_flat = self.axes.flatten()
+        else:
+            axes_flat = self.axes.flatten()
+        
+        # Compute colormap range from all slices
+        if vmin is None or vmax is None:
+            all_data = np.concatenate([s.flatten() for s in slices])
+            if vmin is None:
+                vmin = np.percentile(all_data, 2)  # 2nd percentile
+            if vmax is None:
+                vmax = np.percentile(all_data, 98)  # 98th percentile
+        
+        # Display each slice
+        im_handles = []
+        for i, (ax, slc) in enumerate(zip(axes_flat, slices)):
+            # Normalize slice to 2D if needed
+            if len(slc.shape) != 2:
+                slc = np.squeeze(slc)
+                if len(slc.shape) != 2:
+                    ax.text(0.5, 0.5, 'Invalid slice shape', 
+                           ha='center', va='center', transform=ax.transAxes)
+                    ax.set_title(f"Slice {i} (ERROR)")
+                    continue
+            
+            # Plot main image
+            im = ax.imshow(slc, cmap=cmap, vmin=vmin, vmax=vmax, origin='lower')
+            im_handles.append(im)
+            
+            # Plot overlay if provided
+            if overlays is not None and i < len(overlays):
+                overlay = overlays[i]
+                if overlay is not None:
+                    overlay_norm = (overlay - np.min(overlay)) / (np.max(overlay) - np.min(overlay) + 1e-10)
+                    ax.imshow(overlay_norm, cmap=cmap_overlay, alpha=alpha_overlay, origin='lower')
+            
+            # Set title
+            if titles is not None and i < len(titles):
+                ax.set_title(titles[i], fontsize=10)
+            else:
+                ax.set_title(f"Slice {i}", fontsize=10)
+            
+            ax.axis('off')
+        
+        # Hide unused subplots
+        for ax in axes_flat[n_slices:]:
+            ax.axis('off')
+        
+        # Add colorbar
+        if len(im_handles) > 0:
+            cbar_ax = self.fig.add_axes([0.92, 0.15, 0.02, 0.7])
+            self.fig.colorbar(im_handles[0], cax=cbar_ax)
+        
+        plt.tight_layout(rect=[0, 0, 0.9, 1])
+        plt.show()
+        
+        return self.fig, self.axes
+
+
+# ============================================================================
 # CONVENIENCE FUNCTIONS
 # ============================================================================
 

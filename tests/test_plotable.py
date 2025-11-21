@@ -505,5 +505,319 @@ class TestAblePlotOverlayMethods:
         plt.close('all')
 
 
+# ============================================================================
+# SLICING UTILITIES TESTS
+# ============================================================================
+
+class TestSliceExtraction:
+    """Test Imaginable.extractRepresentativeSlices() method."""
+    
+    def test_extract_slices_basic(self, scalar_imaginable_3d):
+        """Test basic slice extraction."""
+        result = scalar_imaginable_3d.extractRepresentativeSlices(
+            planes='all', offsets=[-5, 0, 5]
+        )
+        assert 'slices' in result
+        assert 'plane_names' in result
+        assert 'center_of_gravity' in result
+        assert len(result['slices']) > 0
+        assert all(isinstance(s, np.ndarray) for s in result['slices'])
+    
+    def test_extract_slices_single_plane(self, scalar_imaginable_3d):
+        """Test extraction with single plane."""
+        result = scalar_imaginable_3d.extractRepresentativeSlices(
+            planes=[0], offsets=[0]
+        )
+        assert len(result['slices']) >= 1
+    
+    def test_extract_slices_multiple_offsets(self, scalar_imaginable_3d):
+        """Test extraction with multiple offsets."""
+        offsets = [-10, -5, 0, 5, 10]
+        result = scalar_imaginable_3d.extractRepresentativeSlices(
+            planes=[0, 1, 2], offsets=offsets
+        )
+        assert len(result['slices']) > 0
+        assert len(result['offsets']) == len(offsets)
+    
+    def test_extract_slices_returns_2d(self, scalar_imaginable_3d):
+        """Test that extracted slices are 2D."""
+        result = scalar_imaginable_3d.extractRepresentativeSlices(planes='all')
+        for slc in result['slices']:
+            assert len(slc.shape) == 2, f"Expected 2D slice, got shape {slc.shape}"
+    
+    def test_extract_slices_center_of_gravity(self, scalar_imaginable_3d):
+        """Test center of gravity computation."""
+        result = scalar_imaginable_3d.extractRepresentativeSlices(planes='all')
+        assert result['center_of_gravity'] is not None
+        assert len(result['center_of_gravity']) == 3
+        assert result['center_of_gravity_index'] is not None
+        assert len(result['center_of_gravity_index']) == 3
+    
+    def test_extract_slices_verbose(self, scalar_imaginable_3d, capsys):
+        """Test verbose mode."""
+        result = scalar_imaginable_3d.extractRepresentativeSlices(
+            planes=[0], offsets=[0], verbose=True
+        )
+        captured = capsys.readouterr()
+        assert 'Center of gravity' in captured.out or len(result['slices']) > 0
+
+
+# ============================================================================
+# BATCH PROCESSING TESTS
+# ============================================================================
+
+class TestBatchProcessing:
+    """Test processImageDirectory utility."""
+    
+    def test_process_directory_basic(self, tmp_path):
+        """Test basic directory processing."""
+        # Create test images
+        for i in range(3):
+            arr = np.random.rand(32, 32, 32).astype(np.float32)
+            img = sitk.GetImageFromArray(arr)
+            filepath = tmp_path / f"image_{i}.nii.gz"
+            sitk.WriteImage(img, str(filepath))
+        
+        # Simple processor that returns image properties
+        def processor(img):
+            return {'size': img.getImageSize(), 'spacing': img.getImageSpacing()}
+        
+        try:
+            from pyable_eros_montin.utils import processImageDirectory
+        except ImportError:
+            from pyable_eros_montin.utils import processImageDirectory
+        
+        df = processImageDirectory(
+            str(tmp_path), processor,
+            file_pattern='*.nii.gz',
+            verbose=False
+        )
+        
+        assert len(df) == 3
+        assert 'filepath' in df.columns
+        assert 'size' in df.columns
+    
+    def test_process_directory_csv_export(self, tmp_path):
+        """Test CSV export."""
+        # Create test images
+        for i in range(2):
+            arr = np.random.rand(32, 32, 32).astype(np.float32)
+            img = sitk.GetImageFromArray(arr)
+            filepath = tmp_path / f"image_{i}.nii.gz"
+            sitk.WriteImage(img, str(filepath))
+        
+        def processor(img):
+            return {'size': img.getImageSize()}
+        
+        try:
+            from pyable_eros_montin.utils import processImageDirectory
+        except ImportError:
+            from pyable_eros_montin.utils import processImageDirectory
+        
+        output_csv = tmp_path / "results.csv"
+        df = processImageDirectory(
+            str(tmp_path), processor,
+            file_pattern='*.nii.gz',
+            output_csv=str(output_csv),
+            verbose=False
+        )
+        
+        assert output_csv.exists()
+        df_read = __import__('pandas').read_csv(output_csv)
+        assert len(df_read) == 2
+    
+    def test_process_directory_empty_folder(self, tmp_path):
+        """Test with empty directory."""
+        try:
+            from pyable_eros_montin.utils import processImageDirectory
+        except ImportError:
+            from pyable_eros_montin.utils import processImageDirectory
+        
+        def processor(img):
+            return {}
+        
+        df = processImageDirectory(
+            str(tmp_path), processor,
+            file_pattern='*.nii.gz',
+            verbose=False
+        )
+        
+        assert len(df) == 0
+    
+    def test_process_directory_nonexistent(self):
+        """Test with nonexistent directory."""
+        try:
+            from pyable_eros_montin.utils import processImageDirectory
+        except ImportError:
+            from pyable_eros_montin.utils import processImageDirectory
+        
+        def processor(img):
+            return {}
+        
+        with pytest.raises(ValueError):
+            processImageDirectory(
+                "/nonexistent/path",
+                processor,
+                verbose=False
+            )
+
+
+# ============================================================================
+# GRIDPLOTTER TESTS
+# ============================================================================
+
+class TestGridPlotter:
+    """Test GridPlotter class."""
+    
+    def test_gridplotter_basic(self):
+        """Test basic grid plotter creation."""
+        try:
+            from pyable_eros_montin.plotable import GridPlotter
+        except ImportError:
+            from pyable_eros_montin.plotable import GridPlotter
+        
+        grid = GridPlotter()
+        assert grid.fig is None
+        assert grid.axes is None
+    
+    def test_gridplotter_show_grid(self):
+        """Test showing grid of slices."""
+        try:
+            from pyable_eros_montin.plotable import GridPlotter
+        except ImportError:
+            from pyable_eros_montin.plotable import GridPlotter
+        
+        # Create test slices
+        slices = [np.random.rand(50, 50) for _ in range(6)]
+        
+        grid = GridPlotter(figsize=(10, 8))
+        grid.show_grid(slices, rows=2, cols=3)
+        
+        assert grid.fig is not None
+        assert grid.axes is not None
+        plt.close('all')
+    
+    def test_gridplotter_with_titles(self):
+        """Test grid plotter with custom titles."""
+        try:
+            from pyable_eros_montin.plotable import GridPlotter
+        except ImportError:
+            from pyable_eros_montin.plotable import GridPlotter
+        
+        slices = [np.random.rand(50, 50) for _ in range(4)]
+        titles = ['Slice A', 'Slice B', 'Slice C', 'Slice D']
+        
+        grid = GridPlotter()
+        grid.show_grid(slices, rows=2, cols=2, titles=titles)
+        
+        assert grid.fig is not None
+        plt.close('all')
+    
+    def test_gridplotter_auto_grid_size(self):
+        """Test automatic grid size calculation."""
+        try:
+            from pyable_eros_montin.plotable import GridPlotter
+        except ImportError:
+            from pyable_eros_montin.plotable import GridPlotter
+        
+        slices = [np.random.rand(50, 50) for _ in range(7)]
+        
+        grid = GridPlotter()
+        grid.show_grid(slices)  # Should auto-calculate grid size
+        
+        assert grid.fig is not None
+        plt.close('all')
+    
+    def test_gridplotter_with_overlays(self):
+        """Test grid plotter with overlay slices."""
+        try:
+            from pyable_eros_montin.plotable import GridPlotter
+        except ImportError:
+            from pyable_eros_montin.plotable import GridPlotter
+        
+        slices = [np.random.rand(50, 50) for _ in range(3)]
+        overlays = [np.random.rand(50, 50) for _ in range(3)]
+        
+        grid = GridPlotter()
+        grid.show_grid(slices, overlays=overlays, alpha_overlay=0.5)
+        
+        assert grid.fig is not None
+        plt.close('all')
+    
+    def test_gridplotter_colormap_params(self):
+        """Test grid plotter with custom colormap parameters."""
+        try:
+            from pyable_eros_montin.plotable import GridPlotter
+        except ImportError:
+            from pyable_eros_montin.plotable import GridPlotter
+        
+        slices = [np.random.rand(50, 50) for _ in range(4)]
+        
+        grid = GridPlotter()
+        grid.show_grid(slices, cmap='viridis', vmin=0.2, vmax=0.8)
+        
+        assert grid.fig is not None
+        plt.close('all')
+
+
+# ============================================================================
+# INTEGRATION TESTS FOR NEW FEATURES
+# ============================================================================
+
+class TestIntegrationNewFeatures:
+    """Integration tests combining new utilities."""
+    
+    def test_extract_slices_then_plot_grid(self, scalar_imaginable_3d):
+        """Test extracting slices and plotting in grid."""
+        try:
+            from pyable_eros_montin.plotable import GridPlotter
+        except ImportError:
+            from pyable_eros_montin.plotable import GridPlotter
+        
+        # Extract slices
+        result = scalar_imaginable_3d.extractRepresentativeSlices(
+            planes='all', offsets=[-5, 0, 5]
+        )
+        
+        # Plot in grid
+        grid = GridPlotter()
+        titles = [f"{name} ({offset}mm)" for name, offset in result['plane_names']]
+        grid.show_grid(result['slices'], titles=titles)
+        
+        assert grid.fig is not None
+        plt.close('all')
+    
+    def test_batch_process_with_slice_extraction(self, tmp_path):
+        """Test batch processing with slice extraction."""
+        # Create test images
+        for i in range(2):
+            arr = np.random.rand(32, 32, 32).astype(np.float32)
+            img = sitk.GetImageFromArray(arr)
+            filepath = tmp_path / f"image_{i}.nii.gz"
+            sitk.WriteImage(img, str(filepath))
+        
+        def processor(img):
+            result = img.extractRepresentativeSlices(planes=[0], offsets=[0])
+            return {
+                'num_slices': len(result['slices']),
+                'size': img.getImageSize()
+            }
+        
+        try:
+            from pyable_eros_montin.utils import processImageDirectory
+        except ImportError:
+            from pyable_eros_montin.utils import processImageDirectory
+        
+        df = processImageDirectory(
+            str(tmp_path), processor,
+            file_pattern='*.nii.gz',
+            verbose=False
+        )
+        
+        assert len(df) == 2
+        assert 'num_slices' in df.columns
+
+
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+

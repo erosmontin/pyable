@@ -1461,6 +1461,146 @@ class Imaginable:
         return plotOverlay(self, overlay=overlay, alpha=alpha, 
                           title=title, slice_idx=slice_idx, **kwargs)
 
+    def extractRepresentativeSlices(self, planes='all', offsets=[-10, 0, 10], verbose=False):
+        """
+        Extract representative 2D slices from 3 orthogonal planes around center-of-gravity.
+        
+        Useful for quick preview, batch processing, or input to vision models.
+        
+        Args:
+            planes (str or list): Which planes to extract. Options:
+                - 'all': All 3 planes (sagittal, coronal, axial) [default]
+                - list of plane indices [0, 1, 2] or names ['sagittal', 'coronal', 'axial']
+            offsets (list): Slice offsets from center-of-gravity (in mm). Default: [-10, 0, 10]
+                            Produces 3 slices per plane × N planes
+            verbose (bool): Print debug information
+            
+        Returns:
+            dict: Contains:
+                - 'slices': List of numpy arrays (2D slices in order: plane0_offset0, plane0_offset1, etc.)
+                - 'plane_names': List of plane names for each slice group
+                - 'offsets': The offsets used
+                - 'center_of_gravity': Physical coordinates of center-of-gravity
+                - 'center_of_gravity_index': Index coordinates of center-of-gravity
+                
+        Example:
+            >>> img = Imaginable('mri_scan.nii.gz')
+            >>> result = img.extractRepresentativeSlices(planes='all', offsets=[-5, 0, 5])
+            >>> slices = result['slices']  # List of 9 numpy arrays (3 planes × 3 offsets)
+            >>> for i, s in enumerate(slices):
+            ...     print(f"Slice {i}: shape {s.shape}")
+        """
+        # Create a working copy oriented to LPS with isotropic spacing
+        working = copy.deepcopy(self)
+        working.dicomOrient('LPS')
+        working.changeImageSpacing((1.0, 1.0, 1.0))
+        
+        # Get center of gravity or geometric center
+        img = working.getImage()
+        img_size = img.GetSize()
+        
+        # Try to compute center of gravity from binary mask
+        try:
+            # Cast to int32 for LabelShapeStatistics (doesn't support float64 in 3D)
+            caster = sitk.CastImageFilter()
+            caster.SetOutputPixelType(sitk.sitkInt32)
+            img_int = caster.Execute(img)
+            
+            # Threshold to get foreground
+            threshold_filter = sitk.BinaryThresholdImageFilter()
+            threshold_filter.SetLowerThreshold(1)
+            threshold_filter.SetUpperThreshold(255)
+            img_binary = threshold_filter.Execute(img_int)
+            
+            stats = sitk.LabelShapeStatisticsImageFilter()
+            stats.Execute(img_binary)
+            
+            # If label 1 exists, use its centroid
+            if 1 in stats.GetLabels():
+                center_of_gravity = stats.GetCentroid(1)
+            else:
+                # Fallback to geometric center
+                center_of_gravity = tuple(s / 2.0 for s in img_size)
+        except:
+            # Fallback to geometric center if label statistics fails
+            center_of_gravity = tuple(s / 2.0 for s in img_size)
+        cog_index = working.getIndexFromCoordinates(center_of_gravity)
+        
+        if verbose:
+            print(f"Center of gravity (physical): {center_of_gravity}")
+            print(f"Center of gravity (index): {cog_index}")
+            print(f"Image size: {working.getImageSize()}")
+        
+        # Determine which planes to extract
+        plane_indices = []
+        plane_names = ['sagittal', 'coronal', 'axial']
+        
+        if isinstance(planes, str):
+            if planes == 'all':
+                plane_indices = [0, 1, 2]
+            else:
+                raise ValueError(f"planes must be 'all' or a list of indices/names, got: {planes}")
+        else:
+            plane_indices = planes
+        
+        # Extract slices
+        slices_list = []
+        plane_labels = []
+        
+        for plane_idx in plane_indices:
+            for offset in offsets:
+                try:
+                    slice_index = int(cog_index[plane_idx] + offset)
+                    img_size = working.getImageSize()[plane_idx]
+                    
+                    # Check bounds
+                    if slice_index < 0 or slice_index >= img_size:
+                        if verbose:
+                            print(f"Skipping {plane_names[plane_idx]} offset {offset}: "
+                                  f"index {slice_index} out of bounds [0, {img_size})")
+                        continue
+                    
+                    # Extract slice as numpy
+                    try:
+                        from .utils import getImaginableSliceNumpy
+                    except ImportError:
+                        from utils import getImaginableSliceNumpy
+                    
+                    slice_array = getImaginableSliceNumpy(working, plane_idx, slice_index)
+                    
+                    if slice_array.shape[0] >= 10 and slice_array.shape[1] >= 10:  # Minimum size
+                        slices_list.append(slice_array)
+                        plane_labels.append((plane_names[plane_idx], offset))
+                        if verbose:
+                            print(f"Extracted {plane_names[plane_idx]} offset {offset}: shape {slice_array.shape}")
+                    else:
+                        if verbose:
+                            print(f"Skipped {plane_names[plane_idx]} offset {offset}: too small ({slice_array.shape})")
+                        
+                except Exception as e:
+                    if verbose:
+                        print(f"Error extracting {plane_names[plane_idx]} offset {offset}: {e}")
+                    continue
+        
+        if len(slices_list) == 0:
+            if verbose:
+                print("Warning: No valid slices extracted!")
+            return {
+                'slices': [],
+                'plane_names': [],
+                'offsets': offsets,
+                'center_of_gravity': center_of_gravity,
+                'center_of_gravity_index': cog_index
+            }
+        
+        return {
+            'slices': slices_list,
+            'plane_names': plane_labels,
+            'offsets': offsets,
+            'center_of_gravity': center_of_gravity,
+            'center_of_gravity_index': cog_index
+        }
+
     
     
     

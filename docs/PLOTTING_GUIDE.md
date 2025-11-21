@@ -107,8 +107,8 @@ img.plotOverlay(slice_idx=100)
 ### Display with Overlay
 
 ```python
-img = Imaginable('T1_image.nii.gz')
-seg = Imaginable('segmentation.nii.gz')
+img = Imaginable('data/image.nii.gz')
+seg = Imaginable('data/mask.nii.gz')
 
 # Overlay segmentation on image
 img.plotOverlay(overlay=seg, alpha=0.5)
