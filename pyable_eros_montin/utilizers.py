@@ -57,7 +57,7 @@ class RoiComparison():
             T=self.getTest()
             t=T.getImage()
             r=R.getImage()
-            if (r is not None) & (t is not None):
+            if (r is not None) and (t is not None):
                 ov=sitk.LabelOverlapMeasuresImageFilter()
                 try:
                     ov.Execute(r, t)

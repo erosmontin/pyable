@@ -254,7 +254,7 @@ def getmeTheSimpleITKImage(x):
     elif (isinstance(x,str)):
         return Imaginable(filename=x).getImage()
     else:
-        raise Exception("I don't know this image tyoe!!! what shuld i do?? ask Eros eros.montin@gmail.com")
+        raise Exception("I don't know this image type!!! what should i do?? ask Eros eros.montin@gmail.com")
 def copythethreeinfosonandsetthemtimage(source,reference):
     sp,o,d=getSITKImageInfo(reference)
     return setSITKImageInfo(source,sp,o,d)
@@ -322,6 +322,7 @@ class Imaginable:
         self.imageStack.push(p)
         if w:
             self.__tellme__(w)
+        return self
     
     def reset(self):
         while self.imageStack.size()>1:
@@ -709,7 +710,7 @@ class Imaginable:
         
 
         for t in range(len(upperB)):
-            if (((upperB[t]==0) and (isinstance(upperB[t],int))) |(upperB[t]==np.NaN)):
+            if (((upperB[t]==0) and (isinstance(upperB[t],int))) or (np.isnan(upperB[t]) if isinstance(upperB[t], (int, float)) else False)):
                 upperB[t]=U[t]
             else:
                 if coordinates:
@@ -858,6 +859,188 @@ class Imaginable:
 
         return self.setImage(self.__transformImage__(transform,interpolator,reference_image,default_value,useNearestNeighborExtrapolator),f"rotated of {R} and {T}")
 
+    # ========================================================================
+    # DEFORMATION & REGISTRATION METHODS
+    # ========================================================================
+
+    def applyTransform(self, transform, target_image=None, interpolator=None, default_value=0):
+        """
+        Apply a registration transform (affine, rigid, B-spline, etc.) to deform the image.
+
+        Parameters
+        ----------
+        transform : str or sitk.Transform
+            Path to transform file (.tfm, .h5) or SimpleITK Transform object
+        target_image : str or sitk.Image, optional
+            Target geometry reference. If None, uses current image geometry
+        interpolator : str, optional
+            Interpolation method: 'linear', 'nearest', 'gaussian', 'bspline'.
+            If None, uses default interpolator
+        default_value : float, default=0
+            Pixel value for regions outside the image domain
+
+        Returns
+        -------
+        self : Imaginable
+            Self for method chaining
+
+        Example
+        -------
+        >>> img = SITKImaginable('moving.nii.gz')
+        >>> img.applyTransform('transform.tfm', interpolator='linear')
+        >>> img.write('warped.nii.gz')
+        """
+        from . import deformations
+        
+        if interpolator is None:
+            interpolator_map = {
+                sitk.sitkLinear: 'linear',
+                sitk.sitkNearestNeighbor: 'nearest',
+                sitk.sitkGaussian: 'gaussian',
+                sitk.sitkBSpline: 'bspline',
+            }
+            interpolator = interpolator_map.get(self.dfltInterpolator, 'linear')
+        
+        warped = deformations.apply_transform(
+            self.getImage(),
+            transform,
+            target_image=target_image,
+            interpolator=interpolator,
+            default_pixel_value=default_value
+        )
+        
+        return self.setImage(warped, f"applied transform from {transform if isinstance(transform, str) else 'transform object'}")
+
+    def applyDisplacementField(self, displacement_field, target_image=None, interpolator=None, default_value=0):
+        """
+        Apply a displacement field to warp the image.
+
+        Displacement fields can come from registration algorithms like ANTs, elastix, or custom tools.
+
+        Parameters
+        ----------
+        displacement_field : str or sitk.Image
+            Path to displacement field file (.mha, .nii.gz) or SimpleITK vector image
+        target_image : str or sitk.Image, optional
+            Target geometry reference. If None, uses displacement field geometry
+        interpolator : str, optional
+            Interpolation method: 'linear', 'nearest', 'gaussian', 'bspline'.
+            If None, uses default interpolator
+        default_value : float, default=0
+            Pixel value for regions outside image domain
+
+        Returns
+        -------
+        self : Imaginable
+            Self for method chaining
+
+        Example
+        -------
+        >>> img = SITKImaginable('moving.nii.gz')
+        >>> img.applyDisplacementField('deformation.mha', target_image='fixed.nii.gz')
+        >>> img.write('warped.nii.gz')
+        """
+        from . import deformations
+        
+        if interpolator is None:
+            interpolator_map = {
+                sitk.sitkLinear: 'linear',
+                sitk.sitkNearestNeighbor: 'nearest',
+                sitk.sitkGaussian: 'gaussian',
+                sitk.sitkBSpline: 'bspline',
+            }
+            interpolator = interpolator_map.get(self.dfltInterpolator, 'linear')
+        
+        warped = deformations.apply_deformation_field(
+            self.getImage(),
+            displacement_field,
+            target_image=target_image,
+            interpolator=interpolator,
+            default_pixel_value=default_value
+        )
+        
+        return self.setImage(warped, f"applied displacement field from {displacement_field if isinstance(displacement_field, str) else 'field object'}")
+
+    def warpImage(self, displacement_field, **kwargs):
+        """
+        Alias for applyDisplacementField. Warp image using a displacement field.
+
+        Parameters
+        ----------
+        displacement_field : str or sitk.Image
+            Displacement field
+        **kwargs
+            Additional arguments passed to applyDisplacementField
+
+        Returns
+        -------
+        self : Imaginable
+        """
+        return self.applyDisplacementField(displacement_field, **kwargs)
+
+    def alignGeometry(self, reference_image):
+        """
+        Align image geometry (origin, spacing, direction) to match a reference image.
+
+        Useful for fixing displacement fields or images with incorrect metadata that
+        was lost during processing.
+
+        Parameters
+        ----------
+        reference_image : str or sitk.Image
+            Reference image with correct geometry
+
+        Returns
+        -------
+        self : Imaginable
+            Self for method chaining
+
+        Example
+        -------
+        >>> df = SITKImaginable('deform.mha')
+        >>> fixed = SITKImaginable('fixed.nii.gz')
+        >>> df.alignGeometry(fixed.getImage())
+        >>> df.write('deform_aligned.mha')
+        """
+        from . import deformations
+        
+        aligned = deformations.align_geometry(self.getImage(), reference_image)
+        return self.setImage(aligned, "geometry aligned to reference")
+
+    def invertDisplacementField(self, max_iterations=100, mean_error_tolerance=1e-3):
+        """
+        Invert the displacement field for reverse warping.
+
+        Useful for forward-backward consistency checks and inverse transformations.
+
+        Parameters
+        ----------
+        max_iterations : int, default=100
+            Maximum iterations for inversion algorithm
+        mean_error_tolerance : float, default=1e-3
+            Tolerance for convergence
+
+        Returns
+        -------
+        self : Imaginable
+            Self with inverted displacement field
+
+        Example
+        -------
+        >>> df = SITKImaginable('forward_deform.mha')
+        >>> df.invertDisplacementField()
+        >>> df.write('backward_deform.mha')
+        """
+        from . import deformations
+        
+        inverted = deformations.invert_displacement_field(
+            self.getImage(),
+            max_iterations=max_iterations,
+            mean_error_tolerance=mean_error_tolerance
+        )
+        
+        return self.setImage(inverted, "displacement field inverted")
+
     def changePixelType(self,dtype):
         return self.setImage(sitk.Cast(self.getImage(),dtype),f'casted to {dtype}')
     def cast(self,dtype):
@@ -951,7 +1134,7 @@ class Imaginable:
         try:
             self.setImage(filter.Execute(self.getImage(),toadd),message)
         except:
-            raise Exception("Can't {message}")
+            raise Exception(f"Can't {message}")
         return self
 
     def __filterSelfAndImageMat__(self,filter,toadd,message):
@@ -976,7 +1159,7 @@ class Imaginable:
             S.changePixelType(O)
             self.setImage(S.getImage(),message)
         except:
-            raise Exception("Can't {message}")
+            raise Exception(f"Can't {message}")
         return self
     
     def getCornersCoordinates(self):
@@ -1235,10 +1418,48 @@ class Imaginable:
             elif self.getImageDimension()==2:
                 timestep=0.125
             else:
-                raise Exception("pleae set a timestep")
+                raise Exception("please set a timestep")
         f.SetTimeStep(timestep)
         return self.__applyImageToImageFilter__(f,cast=cast)
     
+    def plotOverlay(self, overlay=None, alpha=0.5, title=None, slice_idx=None, **kwargs):
+        """
+        Display image with optional overlay using interactive viewer.
+        
+        Parameters
+        ----------
+        overlay : sitk.Image or Imaginable, optional
+            Overlay image (will be resampled to match this image)
+        alpha : float, default=0.5
+            Overlay opacity (0-1)
+        title : str, optional
+            Figure title
+        slice_idx : int, optional
+            Slice index for 3D images (middle slice if None)
+        **kwargs
+            Additional arguments passed to viewer
+        
+        Returns
+        -------
+        viewer : PlotViewer
+            Viewer instance
+        
+        Examples
+        --------
+        >>> img = Imaginable('image.nii.gz')
+        >>> overlay = Imaginable('segmentation.nii.gz')
+        >>> img.plotOverlay(overlay, alpha=0.6)
+        """
+        try:
+            from .plotable import plotOverlay
+        except ImportError:
+            from plotable import plotOverlay
+        
+        if title is None:
+            title = "Image Viewer"
+        
+        return plotOverlay(self, overlay=overlay, alpha=alpha, 
+                          title=title, slice_idx=slice_idx, **kwargs)
 
     
     
@@ -1247,9 +1468,10 @@ class Imaginable:
 def maskSITKImage(r,maskingvalue=1,foreground=1,outsidevalue=0):
     return sitk.Mask(r, sitk.Cast(foreground,sitk.sitkInt16), maskingValue=maskingvalue, outsideValue=outsidevalue)
 
-
-
-
+    
+    
+    
+    
 def getDirectiontransform(image):
     dimension=image.getImageDimension()
     cosines = sitk.AffineTransform(dimension)
@@ -1364,9 +1586,79 @@ class Roiable(Imaginable):
         mask[np.where(mask>0)]=1
         self.setImageFromNumpy(mask)
         return self
-    
 
+    # ========================================================================
+    # ROI-SPECIFIC DEFORMATION METHODS
+    # ========================================================================
 
+    def applyTransformToROI(self, transform, target_image=None):
+        """
+        Apply a registration transform to this ROI/mask, preserving label values.
+
+        Uses nearest-neighbor interpolation to maintain ROI integrity.
+
+        Parameters
+        ----------
+        transform : str or sitk.Transform
+            Path to transform file (.tfm, .h5) or SimpleITK Transform object
+        target_image : str or sitk.Image, optional
+            Target geometry reference
+
+        Returns
+        -------
+        self : Roiable
+            Self for method chaining
+
+        Example
+        -------
+        >>> roi = Roiable('segmentation.nii.gz')
+        >>> roi.applyTransformToROI('transform.tfm')
+        >>> roi.write('warped_roi.nii.gz')
+        """
+        from . import deformations
+        
+        warped = deformations.apply_transform_to_labels(
+            self.getImage(),
+            transform,
+            target_image=target_image
+        )
+        
+        return self.setImage(warped, f"applied transform to ROI from {transform if isinstance(transform, str) else 'transform object'}")
+
+    def warpROI(self, displacement_field, target_image=None):
+        """
+        Apply a displacement field to warp this ROI/mask, preserving label values.
+
+        Uses nearest-neighbor interpolation to maintain ROI integrity.
+
+        Parameters
+        ----------
+        displacement_field : str or sitk.Image
+            Path to displacement field file (.mha, .nii.gz) or SimpleITK vector image
+        target_image : str or sitk.Image, optional
+            Target geometry reference
+
+        Returns
+        -------
+        self : Roiable
+            Self for method chaining
+
+        Example
+        -------
+        >>> roi = Roiable('segmentation.nii.gz')
+        >>> roi.warpROI('deformation.mha', target_image='fixed.nii.gz')
+        >>> roi.write('warped_roi.nii.gz')
+        """
+        from . import deformations
+        
+        warped = deformations.apply_deformation_field_to_labels(
+            self.getImage(),
+            displacement_field,
+            target_image=target_image,
+            default_label=0
+        )
+        
+        return self.setImage(warped, f"applied displacement field to ROI from {displacement_field if isinstance(displacement_field, str) else 'field object'}")
 
 
 
@@ -1408,7 +1700,7 @@ class LabelMapable(Imaginable):
         return center_of_all
  
     
-    def  getCenterOfGravitygetCenterOfGravityIndex(self):
+    def getCenterOfGravityIndex(self):
         center = self.getIndexFromCoordinates(self.getCenterOfGravityCoordinates())
         return center
 
@@ -1447,6 +1739,80 @@ class LabelMapable(Imaginable):
     def getCentroidIndex(self):
         Centroid = self.getIndexFromCoordinates(self.getCentroidCoordinates())
         return Centroid
+
+    # ========================================================================
+    # MULTI-LABEL DEFORMATION METHODS
+    # ========================================================================
+
+    def applyTransformToLabelMap(self, transform, target_image=None):
+        """
+        Apply a registration transform to this label map, preserving all label values.
+
+        Uses nearest-neighbor interpolation to maintain label integrity.
+
+        Parameters
+        ----------
+        transform : str or sitk.Transform
+            Path to transform file (.tfm, .h5) or SimpleITK Transform object
+        target_image : str or sitk.Image, optional
+            Target geometry reference
+
+        Returns
+        -------
+        self : LabelMapable
+            Self for method chaining
+
+        Example
+        -------
+        >>> labels = LabelMapable('segmentation.nii.gz')
+        >>> labels.applyTransformToLabelMap('transform.tfm')
+        >>> labels.write('warped_labels.nii.gz')
+        """
+        from . import deformations
+        
+        warped = deformations.apply_transform_to_labels(
+            self.getImage(),
+            transform,
+            target_image=target_image
+        )
+        
+        return self.setImage(warped, f"applied transform to label map from {transform if isinstance(transform, str) else 'transform object'}")
+
+    def warpLabelMap(self, displacement_field, target_image=None):
+        """
+        Apply a displacement field to warp this label map, preserving all label values.
+
+        Uses nearest-neighbor interpolation to maintain label integrity across all labels.
+
+        Parameters
+        ----------
+        displacement_field : str or sitk.Image
+            Path to displacement field file (.mha, .nii.gz) or SimpleITK vector image
+        target_image : str or sitk.Image, optional
+            Target geometry reference
+
+        Returns
+        -------
+        self : LabelMapable
+            Self for method chaining
+
+        Example
+        -------
+        >>> labels = LabelMapable('segmentation.nii.gz')
+        >>> labels.warpLabelMap('deformation.mha', target_image='fixed.nii.gz')
+        >>> labels.write('warped_labels.nii.gz')
+        """
+        from . import deformations
+        
+        warped = deformations.apply_deformation_field_to_labels(
+            self.getImage(),
+            displacement_field,
+            target_image=target_image,
+            default_label=0
+        )
+        
+        return self.setImage(warped, f"applied displacement field to label map from {displacement_field if isinstance(displacement_field, str) else 'field object'}")
+
         
 
 class LabelMapableROI(LabelMapable):
@@ -1487,13 +1853,17 @@ class LabelMapableROI(LabelMapable):
         return self
 
     def mergeLabels(self):
+        LABELMAP = None
         for rd,v in zip(self.ROIS,self.labelsvalues):
             print(v)
             O=rd.getImageAsNumpy()
             try:
+                if LABELMAP is None:
+                    LABELMAP = np.zeros_like(O, dtype=np.float32)
                 LABELMAP[np.where(O==1)]=v    
-            except NameError:
-                LABELMAP=O
+            except Exception as e:
+                print(f"Error in mergeLabels: {e}")
+                raise
         self.setImageFromNumpy(LABELMAP,refimage=super().getImage())
         return self
 
@@ -1527,7 +1897,7 @@ class Fieldable(Imaginable):
                 r,o,d=getSITKImageInfo(getmeTheSimpleITKImage(self))
                 nda=setSITKImageInfo(nda,spacing=r,origin=o,direction=d)            
         self.setImage(nda,'image set as numpy array ZYX!!')
-    
+
 
 #     def toVtk(self):
 #         return sitk2vtk(self.getImage(), debugOn=False)
