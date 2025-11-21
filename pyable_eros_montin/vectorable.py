@@ -403,10 +403,71 @@ class Vectorable(Imaginable):
                           title=title, component=component, 
                           slice_idx=slice_idx, **kwargs)
 
+    def viewInteractive(self, overlays=None, orientation=2, slice_idx=None, 
+                       component=None, title=None, figsize=(14, 10), cmap='gray'):
+        """
+        Open an interactive GUI viewer with vector-specific controls.
+        
+        Features:
+        - Orientation selection (axial, sagittal, coronal)
+        - Slice navigation with auto-center
+        - Vector component selection (X, Y, Z, Magnitude)
+        - Multiple overlay layers with individual opacity control
+        - Real-time component updates
+        
+        Parameters
+        ----------
+        overlays : Imaginable, array, or list, optional
+            Single or multiple overlays to display with the vector field
+        orientation : int, default=2
+            Initial viewing orientation (0=axial, 1=sagittal, 2=coronal)
+        slice_idx : int, optional
+            Initial slice index. If None, uses center slice.
+        component : int, optional
+            Initial component to display (0=X, 1=Y, 2=Z)
+        title : str, optional
+            Window title. Auto-generated if None.
+        figsize : tuple, default=(14, 10)
+            Figure size in inches (width, height)
+        cmap : str, default='gray'
+            Colormap for display
+            
+        Returns
+        -------
+        InteractiveViewer
+            Viewer instance
+            
+        Example
+        -------
+        >>> vf = Vectorable('displacement_field.mha')
+        >>> img = Imaginable('reference_image.nii.gz')
+        >>> vf.viewInteractive(overlays=img, component=0, orientation=2)
+        """
+        try:
+            from .interactive_viewer import InteractiveViewer
+        except ImportError:
+            from interactive_viewer import InteractiveViewer
+        
+        if title is None:
+            title = "Vector Field Viewer - Interactive"
+        
+        viewer = InteractiveViewer(self.getImage(), title=title, 
+                                   figsize=figsize, cmap=cmap)
+        viewer.current_orientation = orientation
+        viewer.current_slice = slice_idx or viewer._get_center_slice(orientation)
+        if component is not None:
+            viewer.current_component = component
+        
+        # Add overlays
+        if overlays is not None:
+            if isinstance(overlays, (list, tuple)):
+                viewer.add_overlays(overlays)
+            else:
+                viewer.add_overlay(overlays)
+        
+        viewer.show()
+        return viewer
 
-# ============================================================================
-# TIMESERIESABLE - 4D Time Series Class
-# ============================================================================
 
 class TimeSeriesable(Imaginable):
     """
@@ -803,6 +864,70 @@ class TimeSeriesable(Imaginable):
         return plotOverlay(self, overlay=overlay, alpha=alpha, 
                           title=title, frame=frame, slice_idx=slice_idx, **kwargs)
 
+    def viewInteractive(self, overlays=None, orientation=2, slice_idx=None, 
+                       frame=None, title=None, figsize=(14, 10), cmap='gray'):
+        """
+        Open an interactive GUI viewer with time-series-specific controls.
+        
+        Features:
+        - Orientation selection (axial, sagittal, coronal)
+        - Slice navigation with auto-center
+        - Time frame selection and navigation
+        - Multiple overlay layers with individual opacity control
+        - Real-time frame updates
+        
+        Parameters
+        ----------
+        overlays : Imaginable, array, or list, optional
+            Single or multiple overlays to display with time series
+        orientation : int, default=2
+            Initial viewing orientation (0=axial, 1=sagittal, 2=coronal)
+        slice_idx : int, optional
+            Initial slice index. If None, uses center slice.
+        frame : int, optional
+            Initial frame to display. If None, shows first frame (0).
+        title : str, optional
+            Window title. Auto-generated if None.
+        figsize : tuple, default=(14, 10)
+            Figure size in inches (width, height)
+        cmap : str, default='gray'
+            Colormap for display
+            
+        Returns
+        -------
+        InteractiveViewer
+            Viewer instance
+            
+        Example
+        -------
+        >>> ts = TimeSeriesable('cardiac_4d.nii.gz')
+        >>> roi = Imaginable('roi_mask.nii.gz')
+        >>> ts.viewInteractive(overlays=roi, frame=5, orientation=0)
+        """
+        try:
+            from .interactive_viewer import InteractiveViewer
+        except ImportError:
+            from interactive_viewer import InteractiveViewer
+        
+        if title is None:
+            title = "Time Series Viewer - Interactive"
+        
+        viewer = InteractiveViewer(self.getImage(), title=title, 
+                                   figsize=figsize, cmap=cmap)
+        viewer.current_orientation = orientation
+        viewer.current_slice = slice_idx or viewer._get_center_slice(orientation)
+        if frame is not None:
+            viewer.current_frame = frame
+        
+        # Add overlays
+        if overlays is not None:
+            if isinstance(overlays, (list, tuple)):
+                viewer.add_overlays(overlays)
+            else:
+                viewer.add_overlay(overlays)
+        
+        viewer.show()
+        return viewer
 
-if __name__ == '__main__':
+
     pass

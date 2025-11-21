@@ -38,6 +38,7 @@ Example:
 from .imaginable import Imaginable, SITKImaginable, Roiable, LabelMapable, Fieldable, LabelMapableROI
 from .vectorable import Vectorable, TimeSeriesable
 from .plotable import PlotViewer, ScalarPlotter, VectorPlotter, TimeSeriesPlotter, GridPlotter, plotOverlay
+from .interactive_viewer import InteractiveViewer, OverlayManager, viewInteractiveImage
 from .meshable import vtk2sitk, sitk2vtk
 from .utils import processImageDirectory
 from . import deformations
@@ -63,7 +64,10 @@ __all__ = [
     'VectorPlotter',
     'TimeSeriesPlotter',
     'GridPlotter',
+    'InteractiveViewer',
+    'OverlayManager',
     'plotOverlay',
+    'viewInteractiveImage',
     'processImageDirectory',
     'vtk2sitk',
     'sitk2vtk',

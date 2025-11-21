@@ -1461,6 +1461,88 @@ class Imaginable:
         return plotOverlay(self, overlay=overlay, alpha=alpha, 
                           title=title, slice_idx=slice_idx, **kwargs)
 
+    def viewInteractive(self, overlays=None, orientation=2, slice_idx=None, 
+                       title=None, figsize=(14, 10), cmap='gray'):
+        """
+        Open an interactive GUI viewer with advanced controls.
+        
+        Features:
+        - Orientation selection (axial, sagittal, coronal)
+        - Slice navigation with auto-center
+        - Multiple overlay layers with individual opacity control
+        - Real-time updates
+        
+        Parameters
+        ----------
+        overlays : Imaginable, array, or list, optional
+            Single or multiple overlays to display on top of main image
+            Can be:
+            - Single Imaginable or array
+            - List of [Imaginable/array, ...]
+        orientation : int, default=2
+            Initial viewing orientation:
+            - 0: Axial (XY plane)
+            - 1: Sagittal (YZ plane)
+            - 2: Coronal (XZ plane)
+        slice_idx : int, optional
+            Initial slice index. If None, uses center slice.
+        title : str, optional
+            Window title. Auto-generated if None.
+        figsize : tuple, default=(14, 10)
+            Figure size in inches (width, height)
+        cmap : str, default='gray'
+            Colormap for primary image
+            
+        Returns
+        -------
+        InteractiveViewer
+            Viewer instance (can be used to update/manipulate viewer)
+            
+        Example
+        -------
+        **Single overlay:**
+        
+        >>> img = Imaginable('image.nii.gz')
+        >>> seg = Imaginable('segmentation.nii.gz')
+        >>> img.viewInteractive(overlays=seg, orientation=2)
+        
+        **Multiple overlays:**
+        
+        >>> img = Imaginable('image.nii.gz')
+        >>> seg1 = Imaginable('seg1.nii.gz')
+        >>> seg2 = Imaginable('seg2.nii.gz')
+        >>> img.viewInteractive(overlays=[seg1, seg2], orientation=0)
+        
+        **With numpy arrays:**
+        
+        >>> img = Imaginable('image.nii.gz')
+        >>> mask = np.zeros((256, 256))
+        >>> mask[50:200, 50:200] = 1
+        >>> img.viewInteractive(overlays=mask, slice_idx=100)
+        """
+        try:
+            from .interactive_viewer import InteractiveViewer
+        except ImportError:
+            from interactive_viewer import InteractiveViewer
+        
+        if title is None:
+            title = "Image Viewer - Interactive"
+        
+        viewer = InteractiveViewer(self.getImage(), title=title, 
+                                   figsize=figsize, cmap=cmap)
+        viewer.current_orientation = orientation
+        viewer.current_slice = slice_idx or viewer._get_center_slice(orientation)
+        
+        # Add overlays
+        if overlays is not None:
+            if isinstance(overlays, (list, tuple)):
+                viewer.add_overlays(overlays)
+            else:
+                viewer.add_overlay(overlays)
+        
+        viewer.show()
+        return viewer
+
     def extractRepresentativeSlices(self, planes='all', offsets=[-10, 0, 10], verbose=False):
         """
         Extract representative 2D slices from 3 orthogonal planes around center-of-gravity.
