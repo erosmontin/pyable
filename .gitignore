@@ -1,3 +1,10 @@
 dist/
 pyable_eros_montin/__pycache__/
 d/
+.vscode/
+d/
+d2/
+__pycache__/
+*.pyc
+.pytest_cache/
+
