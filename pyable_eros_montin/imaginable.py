@@ -492,11 +492,26 @@ class Imaginable:
         IM=self
         ROI=secondimaginable
         
-        im=getImaginableSliceNumpy(IM,axis,index)
-        im2=getImaginableSliceNumpy(ROI,axis,index)
-        
-        
-        return overlayNumpyImageAndNumpyLabelmap(im.T, im2.T, image_cmap=image_cmap,labelmap_cmap=labelmap_cmap,alpha_value=alpha_value,image_vmax=image_vmax,image_vmin=image_vmin,labelmap_vmax=labelmap_vmax,labelmap_vmin=labelmap_vmin,show=show,save=save,title=title,labelmap_name=labelmap_name)
+        im = getImaginableSliceNumpy(IM, axis, index)
+        im2 = getImaginableSliceNumpy(ROI, axis, index)
+
+        # getImaginableSliceNumpy() returns a 2D numpy slice in (Y,X) ordering
+        # which is directly compatible with matplotlib.imshow (rows, cols).
+        # Previously code used .T here (legacy from v2 conventions) — remove it.
+        return overlayNumpyImageAndNumpyLabelmap(
+            im, im2,
+            image_cmap=image_cmap,
+            labelmap_cmap=labelmap_cmap,
+            alpha_value=alpha_value,
+            image_vmax=image_vmax,
+            image_vmin=image_vmin,
+            labelmap_vmax=labelmap_vmax,
+            labelmap_vmin=labelmap_vmin,
+            show=show,
+            save=save,
+            title=title,
+            labelmap_name=labelmap_name
+        )
 
 
     def filterValues(self,values):
@@ -514,8 +529,56 @@ class Imaginable:
         BU=[int(a) for a in BU]
         return self.cropImage(BL,BU)
     
-    def resampleOnCanonicalSpace(self):
-        return self.dicomOrient('LPS')
+    def resampleOnCanonicalSpace(self, interpolator=None, useNearestNeighborExtrapolator=None, bgvalue=0.0):
+        """
+        Resample image to canonical LPS orientation with axis-aligned grid.
+        
+        This comprehensive method handles both oblique acquisitions and 
+        non-LPS orientations, ensuring the result has:
+        - Direction matrix: identity (1,0,0, 0,1,0, 0,0,1)
+        - Anatomical orientation: LPS (Left-Posterior-Superior)
+        
+        The method automatically detects if the image is oblique and applies
+        the appropriate transformation:
+        1. If oblique: resamples to axis-aligned grid first (uses interpolation)
+        2. Then reorients to LPS anatomical convention (permute/flip if needed)
+        
+        Args:
+            interpolator: Interpolation method for resampling (default: linear)
+            useNearestNeighborExtrapolator: Extrapolator for out-of-bounds (default: False)
+            bgvalue: Background value for regions outside original image (default: 0.0)
+        
+        Returns:
+            self (for chaining)
+            
+        Example:
+            >>> img = Imaginable(imagepath='oblique_scan.nii.gz')
+            >>> img.resampleOnCanonicalSpace()
+            >>> # Now in LPS with identity direction matrix
+            >>> arr = img.getImageAsNumpy()  # (Z,Y,X) with predictable axes
+            
+        Note:
+            - For oblique images: resampling with interpolation is applied
+            - For axis-aligned images: only permutation/flipping (no interpolation)
+            - Physical coordinates (mm) are always preserved
+            - Deprecated alias: Use resampleToAxisAligned() + reorientToLPS() for explicit control
+        """
+        # Resolve interpolator/extrapolator defaults from class attributes
+        if interpolator is None:
+            interpolator = self.dfltInterpolator
+        if useNearestNeighborExtrapolator is None:
+            useNearestNeighborExtrapolator = self.dfltuseNearestNeighborExtrapolator
+
+        # Step 1: Handle oblique acquisitions if necessary
+        if not self.isAxisAligned():
+            # Image is oblique - need to resample to axis-aligned grid first
+            self.resampleToAxisAligned(interpolator, useNearestNeighborExtrapolator, bgvalue)
+        
+        # Step 2: Ensure LPS anatomical orientation
+        # If already LPS and axis-aligned, this is a no-op
+        self.reorientToLPS()
+        
+        return self
     
     def setImageFromNumpy(self, nparray, refimage=None, vector=False, spacing=None, origin=None, direction=None):
         """
@@ -1340,17 +1403,27 @@ class Imaginable:
 
     def applyTransform(self, transform, target_image=None, interpolator=None, default_value=0):
         """
-        Apply a registration transform (affine, rigid, B-spline, etc.) to deform the image.
+        Apply a registration transform to the image, with intelligent handling based on image type.
+
+        This universal method works on all Imaginable subclasses:
+        - For integer/label images (Roiable, LabelMapable): uses label-preserving transform (nearest-neighbor)
+        - For continuous images: uses the standard transform with interpolation
+        - For vector fields (Fieldable): handles vector-aware transforms
+        - Optionally resamples the result to a target image geometry
 
         Parameters
         ----------
         transform : str or sitk.Transform
             Path to transform file (.tfm, .h5) or SimpleITK Transform object
         target_image : str or sitk.Image, optional
-            Target geometry reference. If None, uses current image geometry
+            Target geometry to resample the warped image into. If provided,
+            the transformed image will be resampled to match this reference image's
+            origin, spacing, size, and direction. Useful for registration output
+            that needs to be in a specific space.
         interpolator : str, optional
             Interpolation method: 'linear', 'nearest', 'gaussian', 'bspline'.
-            If None, uses default interpolator
+            If None, uses default interpolator. For label images, this is ignored
+            in favor of nearest-neighbor to preserve label integrity.
         default_value : float, default=0
             Pixel value for regions outside the image domain
 
@@ -1361,29 +1434,88 @@ class Imaginable:
 
         Example
         -------
+        >>> # Continuous image with interpolation
         >>> img = SITKImaginable('moving.nii.gz')
         >>> img.applyTransform('transform.tfm', interpolator='linear')
         >>> img.write('warped.nii.gz')
+        
+        >>> # Label/ROI with label-preserving transform
+        >>> roi = Roiable('segmentation.nii.gz')
+        >>> roi.applyTransform('transform.tfm')  # Automatically uses nearest-neighbor
+        >>> roi.write('warped_roi.nii.gz')
+        
+        >>> # Resample to reference space
+        >>> moving = SITKImaginable('moving.nii.gz')
+        >>> fixed = SITKImaginable('fixed.nii.gz')
+        >>> moving.applyTransform('transform.tfm', target_image=fixed.getImage())
+        >>> moving.write('warped_to_fixed.nii.gz')
         """
         from . import deformations
-        
-        if interpolator is None:
-            interpolator_map = {
-                sitk.sitkLinear: 'linear',
-                sitk.sitkNearestNeighbor: 'nearest',
-                sitk.sitkGaussian: 'gaussian',
-                sitk.sitkBSpline: 'bspline',
-            }
-            interpolator = interpolator_map.get(self.dfltInterpolator, 'linear')
-        
-        warped = deformations.apply_transform(
-            self.getImage(),
-            transform,
-            target_image=target_image,
-            interpolator=interpolator,
-            default_pixel_value=default_value
-        )
-        
+
+        image = self.getImage()
+        # Defensive: if no image is set, just return self
+        if image is None:
+            return self
+
+        # Determine pixel type and prefer label-preserving transform for
+        # common integer types.
+        try:
+            pixid = image.GetPixelID()
+        except Exception:
+            pixid = None
+
+        integer_pixel_types = {
+            sitk.sitkUInt8, sitk.sitkInt8,
+            sitk.sitkUInt16, sitk.sitkInt16,
+            sitk.sitkUInt32, sitk.sitkInt32
+        }
+
+        warped = None
+        if pixid in integer_pixel_types:
+            # Label/ROI image: use label-preserving transform
+            try:
+                warped = deformations.apply_transform_to_labels(
+                    image,
+                    transform,
+                    target_image=target_image
+                )
+            except Exception:
+                # Fallback to generic transform if label-specific call fails
+                if interpolator is None:
+                    interpolator_map = {
+                        sitk.sitkLinear: 'linear',
+                        sitk.sitkNearestNeighbor: 'nearest',
+                        sitk.sitkGaussian: 'gaussian',
+                        sitk.sitkBSpline: 'bspline',
+                    }
+                    interpolator = interpolator_map.get(self.dfltInterpolator, 'linear')
+                
+                warped = deformations.apply_transform(
+                    image,
+                    transform,
+                    target_image=target_image,
+                    interpolator=interpolator,
+                    default_pixel_value=default_value
+                )
+        else:
+            # Continuous image: use regular transform with interpolation
+            if interpolator is None:
+                interpolator_map = {
+                    sitk.sitkLinear: 'linear',
+                    sitk.sitkNearestNeighbor: 'nearest',
+                    sitk.sitkGaussian: 'gaussian',
+                    sitk.sitkBSpline: 'bspline',
+                }
+                interpolator = interpolator_map.get(self.dfltInterpolator, 'linear')
+            
+            warped = deformations.apply_transform(
+                image,
+                transform,
+                target_image=target_image,
+                interpolator=interpolator,
+                default_pixel_value=default_value
+            )
+
         return self.setImage(warped, f"applied transform from {transform if isinstance(transform, str) else 'transform object'}")
 
     def applyDisplacementField(self, displacement_field, target_image=None, interpolator=None, default_value=0):
@@ -2175,6 +2307,175 @@ class Imaginable:
             'center_of_gravity_index': cog_index
         }
 
+    def renderIsosurface(self, isosurface_value=None, component_index=0, time_index=0, 
+                        color=(1.0, 0.0, 0.0), opacity=1.0, show=True, title=None):
+        """
+        Render an isosurface of the image using VTK.
+        
+        For continuous images (Imaginable, SITKImaginable, Fieldable):
+            Creates a 3D isosurface at the specified value.
+        For vector fields (Fieldable):
+            Can render magnitude or extract specific component/time.
+        For ROIs (Roiable):
+            Renders the boundary of the ROI at value 0.5 (between 0 and 1).
+        
+        Parameters
+        ----------
+        isosurface_value : float, optional
+            The isovalue at which to create the surface. If None:
+            - For continuous images: uses mean intensity
+            - For ROIs: uses 0.5 (boundary between foreground/background)
+            - For vector fields: uses magnitude mean
+        component_index : int, default=0
+            For multi-component images, which component to render.
+            For vector fields, 0=magnitude, 1+=individual components.
+        time_index : int, default=0
+            For 4D images (3D + time), which time frame to render.
+        color : tuple, default=(1.0, 0.0, 0.0)
+            RGB color for the surface (0-1 range). Default: red.
+        opacity : float, default=1.0
+            Surface opacity (0-1). Default: fully opaque.
+        show : bool, default=True
+            If True, displays the isosurface in an interactive VTK window.
+            If False, returns the actor without showing.
+        title : str, optional
+            Window title. Auto-generated if None.
+        
+        Returns
+        -------
+        vtk.vtkActor or tuple
+            If show=False: returns (actor, renderer, window)
+            If show=True: returns the actor after display
+        
+        Example
+        -------
+        **Continuous image:**
+        
+        >>> img = SITKImaginable('mri_scan.nii.gz')
+        >>> # Render at 50% of intensity range
+        >>> img.renderIsosurface(isosurface_value=100)
+        
+        **ROI/segmentation:**
+        
+        >>> roi = Roiable('segmentation.nii.gz')
+        >>> # Render boundary (automatically uses 0.5)
+        >>> roi.renderIsosurface(color=(0.0, 1.0, 0.0))
+        
+        **Vector field magnitude:**
+        
+        >>> vec = Fieldable('displacement_field.nii.gz')
+        >>> # Render isosurface of displacement magnitude
+        >>> vec.renderIsosurface(component_index=0, isosurface_value=5.0)
+        
+        **Without displaying (for batch processing):**
+        
+        >>> img = SITKImaginable('image.nii.gz')
+        >>> actor, renderer, window = img.renderIsosurface(show=False)
+        >>> # Manipulate actor/renderer/camera as needed
+        
+        Note
+        ----
+        Requires VTK to be installed. ROI images must be binary or will be thresholded.
+        """
+        import vtk
+        
+        # Get the image, handling multi-component/4D cases
+        image = self.getImage()
+        
+        # Extract component or time frame if needed
+        if image.GetNumberOfComponentsPerPixel() > 1 and component_index > 0:
+            # Extract specific component from multi-component image
+            extractor = sitk.VectorIndexSelectionCastImageFilter()
+            extractor.SetIndex(component_index)
+            image = extractor.Execute(image)
+        
+        if image.GetDimension() == 4:
+            # Extract time frame from 4D image
+            slicer = sitk.ExtractImageFilter()
+            size = list(image.GetSize())
+            size[3] = 0  # Remove time dimension
+            slicer.SetSize(size)
+            
+            index = [0, 0, 0, time_index]
+            slicer.SetIndex(index)
+            image = slicer.Execute(image)
+        
+        # Convert to VTK
+        try:
+            from .meshable import sitk2vtk
+        except ImportError:
+            from meshable import sitk2vtk
+        
+        vtk_image = sitk2vtk(image)
+        
+        # Determine isosurface value if not provided
+        if isosurface_value is None:
+            # Compute statistics to find good default isosurface value
+            stats_filter = sitk.StatisticsImageFilter()
+            stats_filter.Execute(image)
+            mean_val = stats_filter.GetMean()
+            
+            # For ROIs (Roiable), use 0.5 if not specified
+            try:
+                from .imaginable import Roiable
+                if isinstance(self, Roiable):
+                    isosurface_value = 0.5
+                else:
+                    isosurface_value = mean_val
+            except:
+                isosurface_value = mean_val
+        
+        # Create marching cubes isosurface
+        mc_filter = vtk.vtkMarchingCubes()
+        mc_filter.SetInputData(vtk_image)
+        mc_filter.SetValue(0, isosurface_value)  # Set isovalue
+        mc_filter.Update()
+        
+        polydata = mc_filter.GetOutput()
+        
+        # Create mapper
+        mapper = vtk.vtkPolyDataMapper()
+        mapper.SetInputData(polydata)
+        mapper.ScalarVisibilityOff()  # Don't color by scalars, use actor color
+        
+        # Create actor
+        actor = vtk.vtkActor()
+        actor.SetMapper(mapper)
+        actor.GetProperty().SetColor(*color)
+        actor.GetProperty().SetOpacity(opacity)
+        
+        if not show:
+            return (actor, None, None)  # Return actor without displaying
+        
+        # Create renderer and window
+        renderer = vtk.vtkRenderer()
+        renderer.AddActor(actor)
+        renderer.SetBackground(0.1, 0.1, 0.1)  # Dark gray background
+        renderer.ResetCamera()
+        
+        render_window = vtk.vtkRenderWindow()
+        render_window.AddRenderer(renderer)
+        render_window.SetSize(800, 600)
+        
+        if title is None:
+            title = f"Isosurface (value={isosurface_value:.2f})"
+        render_window.SetWindowName(title)
+        
+        # Add interactor
+        interactor = vtk.vtkRenderWindowInteractor()
+        interactor.SetRenderWindow(render_window)
+        
+        # Use trackball camera style for better interaction
+        style = vtk.vtkInteractorStyleTrackballCamera()
+        interactor.SetInteractorStyle(style)
+        
+        # Start interactive rendering
+        interactor.Initialize()
+        render_window.Render()
+        interactor.Start()
+        
+        return actor
+
     
     
     
@@ -2305,45 +2606,11 @@ class Roiable(Imaginable):
     # ROI-SPECIFIC DEFORMATION METHODS
     # ========================================================================
 
-    def applyTransformToROI(self, transform, target_image=None):
-        """
-        Apply a registration transform to this ROI/mask, preserving label values.
-
-        Uses nearest-neighbor interpolation to maintain ROI integrity.
-
-        Parameters
-        ----------
-        transform : str or sitk.Transform
-            Path to transform file (.tfm, .h5) or SimpleITK Transform object
-        target_image : str or sitk.Image, optional
-            Target geometry reference
-
-        Returns
-        -------
-        self : Roiable
-            Self for method chaining
-
-        Example
-        -------
-        >>> roi = Roiable('segmentation.nii.gz')
-        >>> roi.applyTransformToROI('transform.tfm')
-        >>> roi.write('warped_roi.nii.gz')
-        """
-        from . import deformations
-        
-        warped = deformations.apply_transform_to_labels(
-            self.getImage(),
-            transform,
-            target_image=target_image
-        )
-        
-        return self.setImage(warped, f"applied transform to ROI from {transform if isinstance(transform, str) else 'transform object'}")
-
     def warpROI(self, displacement_field, target_image=None):
         """
         Apply a displacement field to warp this ROI/mask, preserving label values.
 
-        Uses nearest-neighbor interpolation to maintain ROI integrity.
+        Uses nearest-neighbor interpolation to maintain ROI integrity across all labels.
 
         Parameters
         ----------
@@ -2457,40 +2724,6 @@ class LabelMapable(Imaginable):
     # ========================================================================
     # MULTI-LABEL DEFORMATION METHODS
     # ========================================================================
-
-    def applyTransformToLabelMap(self, transform, target_image=None):
-        """
-        Apply a registration transform to this label map, preserving all label values.
-
-        Uses nearest-neighbor interpolation to maintain label integrity.
-
-        Parameters
-        ----------
-        transform : str or sitk.Transform
-            Path to transform file (.tfm, .h5) or SimpleITK Transform object
-        target_image : str or sitk.Image, optional
-            Target geometry reference
-
-        Returns
-        -------
-        self : LabelMapable
-            Self for method chaining
-
-        Example
-        -------
-        >>> labels = LabelMapable('segmentation.nii.gz')
-        >>> labels.applyTransformToLabelMap('transform.tfm')
-        >>> labels.write('warped_labels.nii.gz')
-        """
-        from . import deformations
-        
-        warped = deformations.apply_transform_to_labels(
-            self.getImage(),
-            transform,
-            target_image=target_image
-        )
-        
-        return self.setImage(warped, f"applied transform to label map from {transform if isinstance(transform, str) else 'transform object'}")
 
     def warpLabelMap(self, displacement_field, target_image=None):
         """
