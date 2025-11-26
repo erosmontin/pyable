@@ -528,15 +528,15 @@ seg.write('patient_segmentation.nii.gz')
 
 | Method | Purpose | Returns |
 |--------|---------|---------|
-| `applyTransformToROI(transform, ...)` | Warp ROI with label preservation | self |
-| `warpROI(field, ...)` | Warp ROI with displacement field | self |
+| `applyTransform(transform, ...)` | Warp ROI with label-preserving behavior (nearest-neighbor to preserve labels) | self |
+| `warpROI(field, ...)` | Warp ROI with displacement field (label-preserving) | self |
 
 ### LabelMapable Class Methods
 
 | Method | Purpose | Returns |
 |--------|---------|---------|
-| `applyTransformToLabelMap(transform, ...)` | Warp multi-label map | self |
-| `warpLabelMap(field, ...)` | Warp multi-label with displacement field | self |
+| `applyTransform(transform, ...)` | Warp multi-label map with label-preserving behavior | self |
+| `warpLabelMap(field, ...)` | Warp multi-label with displacement field (label-preserving) | self |
 
 ### Deformations Module Functions
 

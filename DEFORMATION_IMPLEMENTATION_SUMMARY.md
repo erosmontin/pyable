@@ -70,7 +70,7 @@ invertDisplacementField(max_iterations, mean_error_tolerance)
 **Added 2 specialized methods for ROI/mask operations**
 
 ```python
-applyTransformToROI(transform, target_image)
+applyTransform(transform, target_image)
 warpROI(displacement_field, target_image)
 ```
 
@@ -86,7 +86,7 @@ warpROI(displacement_field, target_image)
 **Added 2 methods for multi-label segmentation**
 
 ```python
-applyTransformToLabelMap(transform, target_image)
+applyTransform(transform, target_image)
 warpLabelMap(displacement_field, target_image)
 ```
 
@@ -257,14 +257,14 @@ tests/
 
 | Method | Purpose | Returns |
 |--------|---------|---------|
-| `applyTransformToROI(...)` | Warp ROI (labels preserved) | self |
+| `applyTransform(...)` | Warp ROI (labels preserved; uses nearest-neighbor) | self |
 | `warpROI(...)` | Warp with displacement field | self |
 
 ### LabelMapable (Multi-label Class)
 
 | Method | Purpose | Returns |
 |--------|---------|---------|
-| `applyTransformToLabelMap(...)` | Warp labels (all preserved) | self |
+| `applyTransform(...)` | Warp labels (all preserved; label-preserving behavior) | self |
 | `warpLabelMap(...)` | Warp with displacement field | self |
 
 ### Deformations Module Functions

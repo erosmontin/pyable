@@ -1,0 +1,83 @@
+# LLM-friendly descriptor for pyable package (v3, numpy ZYX convention)
+
+# High-level note:
+# - Arrays: All numpy arrays representing images are in (Z, Y, X) ordering unless explicitly stated.
+# - Pixel types: integer pixel types (labels) are treated as discrete; transforms use nearest-neighbor to preserve labels. Continuous types (float) use interpolators (linear, bspline, etc.)
+
+Imaginable:
+  module: pyable_eros_montin.imaginable
+  description: |
+    Core image wrapper around SimpleITK images with v3 numpy ordering.
+    Provides coordinate transforms, resampling, orientation utilities, unified transform application, and VTK isosurface rendering.
+  classes:
+    - name: Imaginable
+      summary: |
+        Base class representing an image-like object. Exposes methods to get/set numpy views, map between array indices and physical points, resample, change direction, apply transforms, and render isosurfaces.
+      methods:
+        - name: getImageAsNumpy
+          signature: (self) -> numpy.ndarray
+          description: Returns the image as a numpy array in (Z,Y,X[,C]) ordering. For vector images, channels/components last.
+          notes:
+            - Returns a view or a copy depending on underlying SimpleITK memory.
+        - name: setImageFromNumpy
+          signature: (self, arr: numpy.ndarray, spacing: tuple=None, origin: tuple=None, direction: tuple=None)
+          description: Sets the underlying SimpleITK image from a numpy array in (Z,Y,X[,C]) ordering. Accepts optional spacing/origin/direction metadata.
+        - name: getPhysicalPointFromArrayIndex
+          signature: (self, idx: tuple) -> tuple
+          description: Map array index (z,y,x) to physical RAS/LPS coordinates based on image origin, spacing, and direction cosine matrix.
+        - name: getArrayIndexFromPhysicalPoint
+          signature: (self, pt: tuple) -> tuple
+          description: Inverse mapping of physical point to array index in ZYX ordering (floating indices allowed).
+        - name: changeImageDirection
+          signature: (self, new_direction: tuple) -> None
+          description: Change the direction cosines (orientation) in the image metadata without resampling data.
+        - name: resampleToAxisAligned
+          signature: (self, new_spacing=None, interpolator=None, default_value=0) -> Imaginable
+          description: Resample the image to axis-aligned world-space (identity direction matrix) with optional spacing and interpolator.
+        - name: resampleOnCanonicalSpace
+          signature: (self, target_image: Imaginable, interpolator=None, default_value=0) -> Imaginable
+          description: Resample this image into the coordinate space of target_image. Handles label-preserving nearest neighbor for integer types.
+        - name: applyTransform
+          signature: (self, transform: SimpleITK.Transform or displacement field, target_image: Imaginable=None, interpolator=None, default_value=0) -> Imaginable
+          description: Unified transform entry point. If image is integer/label, uses nearest-neighbor path that preserves labels; otherwise uses interpolated path. Can output into target_image space if provided.
+          errors: Raises ValueError for unsupported transform types; TypeError for invalid pixel data.
+        - name: applyDisplacementField
+          signature: (self, disp_field: SimpleITK.Image, target_image: Imaginable=None, interpolator=None, default_value=0)
+          description: Warp image by a displacement field (SimpleITK vector image with same physical space as this image).
+        - name: warpImage
+          signature: (self, transform, target_image, interpolator, default_value)
+          description: Internal helper used by applyTransform and applyDisplacementField to perform the actual warping.
+        - name: renderIsosurface
+          signature: (self, isosurface_value: float=None, component_index: int=0, time_index: int=0, color: tuple=(1,0,0), opacity: float=1.0, show: bool=True, title: str=None) -> vtkActor or list[vtkActor]
+          description: Generate VTK isosurface(s) for scalar images, ROI images (label boundaries), and vector image magnitudes. Returns VTK actor(s); when show=True it launches an interactive VTK render window.
+          notes:
+            - For ROI/label images, a label-preserving resampling step is performed before isosurface extraction.
+            - When show=False, returns actors for programmatic uses (batch rendering, saving to file).
+
+Meshable:
+  module: pyable_eros_montin.meshable
+  description: conversion utilities between SimpleITK images and VTK data structures.
+  functions:
+    - name: sitk2vtk
+      signature: (sitk_image: SimpleITK.Image) -> vtkImageData
+      description: Convert a SimpleITK image to VTK image data preserving spacing, origin, and direction.
+    - name: vtk2sitk
+      signature: (vtk_image: vtkImageData) -> SimpleITK.Image
+      description: Convert VTK image data to a SimpleITK image. Useful for pipeline round-trip.
+
+Orientation & Resampling Notes:
+  - dicomOrient / reorientToLPS / reorientToRAS / reorientToRPI are available to change image metadata orientation or resample as needed.
+  - Canonical space utilities normalize images to well-defined axes for consistent processing across datasets.
+
+Tests & Examples:
+  - tests/test_isosurface.py : unit tests covering scalar, ROI, and vector magnitude isosurface generation
+  - example_isosurface.py : CLI examples for interactive and batch isosurface generation
+  - example_show_roi_vtk.py : example showing ROI isosurface generation from a segmentation file
+
+Conventions:
+  - Numpy arrays are Z, Y, X.
+  - Label images: integer dtypes -> nearest neighbor for transforms.
+  - Continuous images: float dtypes -> interpolators applied.
+
+Contact:
+  - For additional clarifications, see `README.md` and `PYABLE_V3_BREAKING_CHANGES.md` for migration notes.
