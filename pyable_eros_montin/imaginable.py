@@ -388,17 +388,89 @@ class Imaginable:
             print("\"{0}\":\"{1}\"".format(key, image.GetMetaData(key)))
             o[key]=image.GetMetaData(key)
         return o
-    def getImageAsNumpyZYX(self):
-        image=self.getImage() 
+    def getImageAsNumpy(self):
+        """
+        Returns the image as a numpy array in standard (Z, Y, X) ordering.
+        
+        This is the standard convention for numpy arrays and PyTorch tensors in medical imaging.
+        For 3D images: (Z, Y, X) = (depth/slices, height/rows, width/cols)
+        For 2D images: (Y, X) = (height/rows, width/cols)
+        
+        Returns:
+            numpy.ndarray: Image array in (Z, Y, X) order for 3D, (Y, X) for 2D
+        
+        Note: This changed in v3! Previously returned (X, Y, Z). 
+              Use getImageAsNumpyXYZ() if you need the old behavior.
+        """
+        image = self.getImage() 
         return sitk.GetArrayFromImage(image)
     
-    def getImageAsNumpy(self):
-        #numpy change the order of the components
-        L=list(range(self.getImageDimension()))
+    def getImageAsNumpyZYX(self):
+        """
+        Returns the image as a numpy array in (Z, Y, X) ordering.
+        Alias for getImageAsNumpy() for explicit clarity.
+        
+        Returns:
+            numpy.ndarray: Image array in (Z, Y, X) order
+        """
+        return self.getImageAsNumpy()
+    
+    def getImageAsNumpyXYZ(self):
+        """
+        Returns the image as a numpy array in (X, Y, Z) ordering.
+        
+        DEPRECATED: This is non-standard for numpy. Provided for backward compatibility only.
+        The old getImageAsNumpy() returned this ordering in v2.
+        
+        Returns:
+            numpy.ndarray: Image array in (X, Y, Z) order - NON-STANDARD
+        """
+        # Transpose from (Z,Y,X) to (X,Y,Z)
+        L = list(range(self.getImageDimension()))
         L.reverse()
-        o=np.transpose(self.getImageAsNumpyZYX(), L)
+        o = np.transpose(self.getImageAsNumpy(), L)
         return o
     
+    def getImageAsNumpyForPyTorch(self):
+        """
+        Returns the image as a numpy array in PyTorch-compatible format.
+        Alias for getImageAsNumpy() since v3 uses standard (Z,Y,X) ordering.
+        
+        For 3D: returns (D, H, W) = (Z, Y, X)
+        For 2D: returns (H, W) = (Y, X)
+        
+        Returns:
+            numpy.ndarray: Image array ready for PyTorch tensors
+        
+        Example:
+            >>> arr = img.getImageAsNumpyForPyTorch()
+            >>> tensor = torch.from_numpy(arr).float()
+            >>> # Shape is (D, H, W) for 3D or (H, W) for 2D
+        """
+        return self.getImageAsNumpy()
+    
+    def getITKImage(self):
+        """
+        Returns the underlying SimpleITK Image object.
+        Explicit alias for getImage() for clarity.
+        
+        The ITK image uses (X, Y, Z) indexing and physical coordinates in millimeters.
+        
+        Returns:
+            SimpleITK.Image: The SimpleITK image object
+        """
+        return self.getImage()
+    
+    def getVTKImage(self):
+        """
+        Convert and return the image as a VTK object.
+        Useful for 3D rendering and visualization with VTK-based tools.
+        
+        Returns:
+            vtk.vtkImageData: The VTK image object
+        """
+        from .meshable import sitk2vtk
+        return sitk2vtk(self.getImage())
     
     
     def overlayAble(self,secondimaginable, axis,index,image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None,title=None,labelmap_name=None):
@@ -445,28 +517,81 @@ class Imaginable:
     def resampleOnCanonicalSpace(self):
         return self.dicomOrient('LPS')
     
-    def setImageFromNumpy(self,nparray,refimage=None, vector=False,spacing=None,origin=None,direction=None):
-        L=list(range(len(nparray.shape)))
-        L.reverse()
-        o=np.transpose(nparray, L)
-        self.setImageFromNumpyZYX(o,refimage, vector,spacing,origin,direction)
-        return self
-
-    def setImageFromNumpyZYX(self,nparray,refimage=None, vector=False,spacing=None,origin=None,direction=None):
-        nda=sitk.GetImageFromArray(nparray, isVector=vector)
+    def setImageFromNumpy(self, nparray, refimage=None, vector=False, spacing=None, origin=None, direction=None):
+        """
+        Set the image from a numpy array in standard (Z, Y, X) ordering.
+        
+        Args:
+            nparray: Numpy array in (Z, Y, X) order for 3D, (Y, X) for 2D
+            refimage: Reference image to copy metadata from
+            vector: Whether the array represents a vector image
+            spacing: Physical spacing if not using refimage
+            origin: Physical origin if not using refimage
+            direction: Direction matrix if not using refimage
+        
+        Returns:
+            self
+        
+        Note: Changed in v3! Now expects (Z,Y,X) ordering to match getImageAsNumpy().
+              Use setImageFromNumpyXYZ() if you have (X,Y,Z) ordered arrays.
+        
+        Example:
+            >>> arr = np.random.rand(100, 200, 300)  # (Z, Y, X)
+            >>> img.setImageFromNumpy(arr)
+        """
+        # Array is already in (Z,Y,X), pass directly to sitk.GetImageFromArray
+        nda = sitk.GetImageFromArray(nparray, isVector=vector)
         if refimage:
-            REF=getmeTheSimpleITKImage(refimage)
-            if np.array_equiv(REF.GetSize(),nparray.shape):
+            REF = getmeTheSimpleITKImage(refimage)
+            if np.array_equiv(REF.GetSize(), nparray.shape[::-1]):  # ITK size is (X,Y,Z)
                 nda.CopyInformation(REF)
             else:
-                nda=setSITKImageInforFromImage(nda,REF)
-        elif ((spacing) and (origin) and (direction) ):
-            nda=setSITKImageInfo(nda,spacing=spacing,origin=origin,direction=direction)
+                nda = setSITKImageInforFromImage(nda, REF)
+        elif ((spacing) and (origin) and (direction)):
+            nda = setSITKImageInfo(nda, spacing=spacing, origin=origin, direction=direction)
         elif self.isImageSet():
             if(self.getImage()):
-                r,o,d=getSITKImageInfo(getmeTheSimpleITKImage(self))
-                nda=setSITKImageInfo(nda,spacing=r,origin=o,direction=d)            
-        self.setImage(nda,'image set as numpy array ZYX!!')
+                r, o, d = getSITKImageInfo(getmeTheSimpleITKImage(self))
+                nda = setSITKImageInfo(nda, spacing=r, origin=o, direction=d)            
+        self.setImage(nda, 'image set from numpy array (Z,Y,X)!')
+        return self
+
+    def setImageFromNumpyZYX(self, nparray, refimage=None, vector=False, spacing=None, origin=None, direction=None):
+        """
+        Set the image from a numpy array in (Z, Y, X) ordering.
+        Alias for setImageFromNumpy() for explicit clarity.
+        
+        Args:
+            nparray: Numpy array in (Z, Y, X) order for 3D, (Y, X) for 2D
+            refimage: Reference image to copy metadata from
+            vector: Whether the array represents a vector image
+            spacing: Physical spacing if not using refimage
+            origin: Physical origin if not using refimage
+            direction: Direction matrix if not using refimage
+        
+        Returns:
+            self
+        """
+        return self.setImageFromNumpy(nparray, refimage, vector, spacing, origin, direction)
+    
+    def setImageFromNumpyXYZ(self, nparray, refimage=None, vector=False, spacing=None, origin=None, direction=None):
+        """
+        Set the image from a numpy array in (X, Y, Z) ordering.
+        
+        DEPRECATED: Provided for backward compatibility only.
+        The old setImageFromNumpy() expected this ordering in v2.
+        
+        Args:
+            nparray: Numpy array in (X, Y, Z) order - NON-STANDARD
+        
+        Returns:
+            self
+        """
+        # Transpose from (X,Y,Z) to (Z,Y,X) before setting
+        L = list(range(len(nparray.shape)))
+        L.reverse()
+        o = np.transpose(nparray, L)
+        return self.setImageFromNumpy(o, refimage, vector, spacing, origin, direction)
     
     def getImageDirection(self):
         image=self.getImage()
@@ -499,25 +624,278 @@ class Imaginable:
         self.setImage(sitk.Resample(image, newSize, t,  interpolator, self.getImageOrigin(), spacing, self.getImageDirection(), bgvalue,image.GetPixelIDValue(),useNearestNeighborExtrapolator),mess)
         return self
     
-    def changeImageDirection(self,direction,interpolator=None,useNearestNeighborExtrapolator=None,bgvalue=0.0):
-        raise Exception("not yet implemented we are working on it")
-        # if interpolator == None:
-        #     interpolator = self.dfltInterpolator
-        # if useNearestNeighborExtrapolator ==None:
-        #     useNearestNeighborExtrapolator=self.dfltuseNearestNeighborExtrapolator
+    def changeImageDirection(self, direction, interpolator=None, useNearestNeighborExtrapolator=None, bgvalue=0.0):
+        """
+        Resample image to a new direction matrix (e.g., axis-aligned grid).
+        
+        This method resamples the image data onto a new grid with the specified
+        direction matrix. Useful for converting oblique acquisitions to axis-aligned
+        grids with standard direction cosines like (1,0,0, 0,1,0, 0,0,1).
+        
+        IMPORTANT: This resamples the data, which may introduce interpolation artifacts.
+        The image size, spacing, and origin are preserved, but the voxel values are
+        interpolated onto the new grid orientation.
+        
+        Args:
+            direction: Target direction matrix (9-tuple for 3D, 4-tuple for 2D)
+                      Example: (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0) for axis-aligned
+            interpolator: Interpolation method (default: linear)
+            useNearestNeighborExtrapolator: Whether to use nearest neighbor for out-of-bounds
+            bgvalue: Background value for regions outside original image
+        
+        Returns:
+            self (for chaining)
+            
+        Example:
+            >>> # Resample oblique image to axis-aligned grid
+            >>> img.changeImageDirection((1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
+            
+        Note:
+            - Use dicomOrient() if you want to reorient without resampling (permute/flip only)
+            - This method resamples, so it may change voxel values slightly due to interpolation
+        """
+        if interpolator is None:
+            interpolator = self.dfltInterpolator
+        if useNearestNeighborExtrapolator is None:
+            useNearestNeighborExtrapolator = self.dfltuseNearestNeighborExtrapolator
 
-        # image=self.getImage()
-        # d=self.getImageDirection()
-        # t=sitk.Transform()
-        # t.SetIdentity()
-        # mess=f'direcion changed from {d} to {direction}'
-        # self.setImage(sitk.Resample(image, self.getImageSize(), t,  interpolator, self.getImageOrigin(), self.getImageSpacing(),direction, bgvalue,image.GetPixelIDValue(),useNearestNeighborExtrapolator),mess)
-        # return self
+        image = self.getImage()
+        old_direction = self.getImageDirection()
+        
+        # Create identity transform (no spatial translation/rotation)
+        t = sitk.Transform()
+        t.SetIdentity()
+        
+        mess = f'direction changed from {old_direction} to {direction}'
+        
+        # Resample with new direction
+        resampled = sitk.Resample(
+            image, 
+            self.getImageSize(),  # Keep same size
+            t,  # Identity transform
+            interpolator, 
+            self.getImageOrigin(),  # Keep same origin
+            self.getImageSpacing(),  # Keep same spacing
+            direction,  # New direction
+            bgvalue, 
+            image.GetPixelIDValue(),
+            useNearestNeighborExtrapolator
+        )
+        
+        self.setImage(resampled, mess)
+        return self
+    
+    def resampleToAxisAligned(self, interpolator=None, useNearestNeighborExtrapolator=None, bgvalue=0.0):
+        """
+        Resample oblique/rotated image to axis-aligned grid with identity direction matrix.
+        
+        This is particularly useful for oblique acquisitions (e.g., oblique MRI scans)
+        where the direction cosines are not aligned with the standard axes. After this
+        operation, the direction matrix will be identity: (1,0,0, 0,1,0, 0,0,1).
+        
+        The image is resampled so that:
+        - Voxel i-axis aligns with physical X-axis (Left→Right in LPS)
+        - Voxel j-axis aligns with physical Y-axis (Posterior→Anterior in LPS)
+        - Voxel k-axis aligns with physical Z-axis (Inferior→Superior in LPS)
+        
+        Args:
+            interpolator: Interpolation method (default: linear)
+            useNearestNeighborExtrapolator: Whether to use nearest neighbor for out-of-bounds
+            bgvalue: Background value for regions outside original image
+        
+        Returns:
+            self (for chaining)
+            
+        Example:
+            >>> # Load oblique MRI scan
+            >>> img = Imaginable(imagepath='oblique_scan.nii.gz')
+            >>> print(img.getDirectionCosines())
+            (0.866, 0.5, 0.0, -0.5, 0.866, 0.0, 0.0, 0.0, 1.0)  # Oblique!
+            >>> 
+            >>> # Resample to axis-aligned
+            >>> img.resampleToAxisAligned()
+            >>> print(img.getDirectionCosines())
+            (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)  # Axis-aligned!
+            
+        Note:
+            - This resamples the data, introducing interpolation
+            - Physical coordinates (mm) are preserved
+            - Size, spacing, origin maintained
+            - For axis-aligned images, this is a no-op (direction already identity)
+        """
+        # Standard identity direction matrix for 3D
+        if self.getImageDimension() == 3:
+            identity_direction = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+        elif self.getImageDimension() == 2:
+            identity_direction = (1.0, 0.0, 0.0, 1.0)
+        else:
+            raise ValueError(f"Unsupported dimension: {self.getImageDimension()}")
+        
+        return self.changeImageDirection(identity_direction, interpolator, useNearestNeighborExtrapolator, bgvalue)
+    
+    def isAxisAligned(self, tolerance=1e-6):
+        """
+        Check if image has axis-aligned direction cosines (near-identity matrix).
+        
+        Args:
+            tolerance: Tolerance for considering values as 0 or 1
+        
+        Returns:
+            bool: True if direction matrix is close to identity
+            
+        Example:
+            >>> img.isAxisAligned()
+            False
+            >>> img.resampleToAxisAligned()
+            >>> img.isAxisAligned()
+            True
+        """
+        direction = self.getImageDirection()
+        
+        if self.getImageDimension() == 3:
+            expected = (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+        elif self.getImageDimension() == 2:
+            expected = (1.0, 0.0, 0.0, 1.0)
+        else:
+            return False
+        
+        # Check if all elements are within tolerance
+        for actual, expect in zip(direction, expected):
+            if abs(actual - expect) > tolerance:
+                return False
+        return True
 
     def dicomOrient(self,orientation='LPS'):
+        """
+        Reorient the image to a specified anatomical orientation.
+        
+        This method DOES modify the numpy array data! It physically reorients
+        the image volume by permuting and potentially flipping axes so that
+        the anatomical directions align with the specified orientation code.
+        
+        Args:
+            orientation: Three-letter code specifying anatomical axes.
+                        Common codes:
+                        - 'LPS': Left-Posterior-Superior (DICOM standard)
+                        - 'RAS': Right-Anterior-Superior (NIfTI/neuroimaging)
+                        - 'LAS': Left-Anterior-Superior
+                        - 'RPI': Right-Posterior-Inferior
+        
+        Returns:
+            self (for chaining)
+            
+        Note:
+            After calling this method:
+            - The numpy array (from getImageAsNumpy()) will be rearranged
+            - The direction matrix will be updated to nearly identity
+            - Physical world coordinates are preserved (same anatomy in same locations)
+            - The image size may change if axes are permuted
+        """
         self.setImage(sitk.DICOMOrient(self.getImage(),orientation),'image oriented to '+orientation)
         return self
     
+    def reorientToLPS(self):
+        """
+        Convenience method to reorient image to LPS (Left-Posterior-Superior).
+        
+        LPS is the DICOM standard orientation where:
+        - First axis (X): Left to Right (L→R)
+        - Second axis (Y): Posterior to Anterior (P→A)
+        - Third axis (Z): Inferior to Superior (I→S)
+        
+        After calling this, array indices approximately map to:
+        - array[k,j,i] where i increases L→R, j increases P→A, k increases I→S
+        
+        Returns:
+            self (for chaining)
+        """
+        return self.dicomOrient('LPS')
+    
+    def reorientToRAS(self):
+        """
+        Convenience method to reorient image to RAS (Right-Anterior-Superior).
+        
+        RAS is common in neuroimaging (NIfTI) where:
+        - First axis (X): Right to Left (R→L)
+        - Second axis (Y): Anterior to Posterior (A→P)
+        - Third axis (Z): Inferior to Superior (I→S)
+        
+        Returns:
+            self (for chaining)
+        """
+        return self.dicomOrient('RAS')
+    
+    def reorientToRPI(self):
+        """
+        Convenience method to reorient image to RPI (Right-Posterior-Inferior).
+        
+        RPI orientation where:
+        - First axis (X): Right to Left (R→L)
+        - Second axis (Y): Posterior to Anterior (P→A)
+        - Third axis (Z): Superior to Inferior (S→I)
+        
+        Returns:
+            self (for chaining)
+        """
+        return self.dicomOrient('RPI')
+    
+    def getOrientationCode(self):
+        """
+        Get the current anatomical orientation code of the image.
+        
+        Returns a three-letter code (e.g., 'LPS', 'RAS') describing which
+        anatomical direction each axis increases toward.
+        
+        Returns:
+            str: Three-letter orientation code (e.g., 'LPS', 'RAS', 'RPI')
+            
+        Example:
+            >>> img.getOrientationCode()
+            'LPS'  # means X increases Left→Right, Y increases Posterior→Anterior, Z increases Inferior→Superior
+        """
+        return sitk.DICOMOrientImageFilter_GetOrientationFromDirectionCosines(self.getImageDirection())
+    
+    def getDirectionCosines(self):
+        """
+        Get the direction cosine matrix as a tuple.
+        
+        The direction matrix defines how voxel indices map to physical coordinates.
+        For a 3D image, this is a 9-element tuple representing a 3x3 matrix:
+        [dir_x0, dir_x1, dir_x2, dir_y0, dir_y1, dir_y2, dir_z0, dir_z1, dir_z2]
+        
+        Where:
+        - (dir_x0, dir_x1, dir_x2) = direction cosines for first axis (columns)
+        - (dir_y0, dir_y1, dir_y2) = direction cosines for second axis (rows)
+        - (dir_z0, dir_z1, dir_z2) = direction cosines for third axis (slices)
+        
+        Returns:
+            tuple: Direction cosine matrix (9 elements for 3D, 4 for 2D)
+            
+        Example:
+            >>> img.getDirectionCosines()
+            (1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)  # Identity = LPS orientation
+        """
+        return self.getImageDirection()
+    
+    def setDirectionCosines(self, direction):
+        """
+        Set the direction cosine matrix.
+        
+        WARNING: This only changes the metadata, NOT the numpy array data!
+        If you want to physically reorient the image data, use dicomOrient() instead.
+        
+        Args:
+            direction: Tuple or list of direction cosines
+                      (9 elements for 3D, 4 elements for 2D)
+        
+        Returns:
+            self (for chaining)
+            
+        See Also:
+            - dicomOrient(): To physically reorient the image data
+            - getDirectionCosines(): To get current direction matrix
+        """
+        return self.setImageDirection(direction)
 
     def setImageSpacing(self,spacing):
         image=self.getImage()
@@ -647,14 +1025,111 @@ class Imaginable:
             self.setImage(sitk.Resample(self.getImage(),target,theT,interpolator,default_value,sitk.sitkUnknown,useNearestNeighborExtrapolator),'resampled on target image')
         return self
     def getCoordinatesFromIndex(self,P):
+        """
+        DEPRECATED: Use getPhysicalPointFromITKIndex() for clarity.
+        Converts ITK index (i,j,k) = (x,y,z) to physical point (x,y,z) in mm.
+        """
         image=self.getImage()
         return image.TransformContinuousIndexToPhysicalPoint(P)
     
     def getIndexFromCoordinates(self,I):
+        """
+        DEPRECATED: Use getITKIndexFromPhysicalPoint() for clarity.
+        Converts physical point (x,y,z) in mm to ITK index (i,j,k) = (x,y,z).
+        """
         image=self.getImage()
         return image.TransformPhysicalPointToIndex(I)
 
         # return image.TransformPhysicalPointToContinuousIndex(I)
+    
+    def getPhysicalPointFromArrayIndex(self, kji_index):
+        """
+        Convert array index (k,j,i) = (z,y,x) to physical point (x,y,z) in mm.
+        
+        Bridges numpy/PyTorch array indexing with ITK physical coordinates.
+        
+        Args:
+            kji_index: Tuple/list of array indices
+                      For 3D: (k, j, i) = (z_idx, y_idx, x_idx)
+                      For 2D: (j, i) = (y_idx, x_idx)
+        
+        Returns:
+            tuple: Physical coordinates in mm
+                  For 3D: (x_mm, y_mm, z_mm)
+                  For 2D: (x_mm, y_mm)
+        
+        Example:
+            >>> arr = img.getImageAsNumpy()  # Shape: (Z, Y, X)
+            >>> k, j, i = arr.shape[0]//2, arr.shape[1]//2, arr.shape[2]//2
+            >>> physical_point = img.getPhysicalPointFromArrayIndex((k, j, i))
+            >>> print(f"Center voxel at {physical_point} mm")
+        """
+        image = self.getImage()
+        if self.getImageDimension() == 3:
+            i, j, k = float(kji_index[2]), float(kji_index[1]), float(kji_index[0])
+            return image.TransformContinuousIndexToPhysicalPoint([i, j, k])
+        elif self.getImageDimension() == 2:
+            i, j = float(kji_index[1]), float(kji_index[0])
+            return image.TransformContinuousIndexToPhysicalPoint([i, j])
+        else:
+            return image.TransformContinuousIndexToPhysicalPoint([float(kji_index[0])])
+    
+    def getArrayIndexFromPhysicalPoint(self, xyz_point):
+        """
+        Convert physical point (x,y,z) in mm to array index (k,j,i) = (z,y,x).
+        
+        Bridges ITK physical coordinates with numpy/PyTorch array indexing.
+        
+        Args:
+            xyz_point: Tuple/list of physical coordinates in mm
+                      For 3D: (x_mm, y_mm, z_mm)
+                      For 2D: (x_mm, y_mm)
+        
+        Returns:
+            tuple: Array indices
+                  For 3D: (k, j, i) = (z_idx, y_idx, x_idx)
+                  For 2D: (j, i) = (y_idx, x_idx)
+        
+        Example:
+            >>> physical_point = (10.5, 20.3, 30.7)  # mm
+            >>> k, j, i = img.getArrayIndexFromPhysicalPoint(physical_point)
+            >>> arr = img.getImageAsNumpy()
+            >>> value = arr[k, j, i]
+        """
+        image = self.getImage()
+        itk_index = image.TransformPhysicalPointToIndex(xyz_point)
+        if self.getImageDimension() == 3:
+            return (itk_index[2], itk_index[1], itk_index[0])
+        elif self.getImageDimension() == 2:
+            return (itk_index[1], itk_index[0])
+        else:
+            return (itk_index[0],)
+    
+    def getPhysicalPointFromITKIndex(self, ijk_index):
+        """
+        Convert ITK index (i,j,k) = (x,y,z) to physical point (x,y,z) in mm.
+        Same as getCoordinatesFromIndex() but with clearer name.
+        
+        Args:
+            ijk_index: ITK index (i, j, k) = (x_idx, y_idx, z_idx)
+        
+        Returns:
+            tuple: Physical coordinates (x_mm, y_mm, z_mm)
+        """
+        return self.getImage().TransformContinuousIndexToPhysicalPoint(ijk_index)
+    
+    def getITKIndexFromPhysicalPoint(self, xyz_point):
+        """
+        Convert physical point (x,y,z) in mm to ITK index (i,j,k) = (x,y,z).
+        Same as getIndexFromCoordinates() but with clearer name.
+        
+        Args:
+            xyz_point: Physical coordinates (x_mm, y_mm, z_mm)
+        
+        Returns:
+            tuple: ITK index (i, j, k) = (x_idx, y_idx, z_idx)
+        """
+        return self.getImage().TransformPhysicalPointToIndex(xyz_point)
     def changeImageSize(self,newSize,interpolator= None,bgvalue=0.0,useNearestNeighborExtrapolator=None):
         if interpolator == None:
             interpolator = self.dfltInterpolator
@@ -1227,19 +1702,36 @@ class Imaginable:
 
 
 
-    def getBoundingBox(self,exclude=[0]):
+    def getBoundingBox(self, exclude=[0]):
         """
-        This function returns the bounding box of the non-zero values in the image
-
+        Returns the bounding box of non-excluded values in array index space.
+        
+        Returns min and max indices in numpy/array ordering: (k, j, i) = (z, y, x)
+        
         Args:
-            exclude (list, optional): _description_. Defaults to [0].
-
+            exclude: List of values to exclude (e.g., background values). Default: [0]
+        
         Returns:
-            _type_: _description_
+            tuple: ((k_min, j_min, i_min), (k_max, j_max, i_max)) as numpy arrays
+                  Returns None if no non-excluded values found
+        
+        Example:
+            >>> bbox = img.getBoundingBox(exclude=[0])
+            >>> if bbox is not None:
+            ...     (k_min, j_min, i_min), (k_max, j_max, i_max) = bbox
+            ...     arr = img.getImageAsNumpy()
+            ...     cropped = arr[k_min:k_max+1, j_min:j_max+1, i_min:i_max+1]
+        
+        Note: Changed in v3! Now returns indices in (k,j,i) = (z,y,x) order to match
+              numpy arrays. Previously returned (x,y,z) order.
         """
-        N=self.getImageAsNumpy()
-        mask = np.isin(N, exclude,invert=True)
+        N = self.getImageAsNumpy()  # Now returns (Z,Y,X) in v3
+        mask = np.isin(N, exclude, invert=True)
         roi_indices = np.argwhere(mask)
+        
+        if len(roi_indices) == 0:
+            return None
+        
         min_coords = np.min(roi_indices, axis=0)
         max_coords = np.max(roi_indices, axis=0)
         bounding_box = (min_coords, max_coords)
@@ -2095,30 +2587,71 @@ class Fieldable(Imaginable):
         self.dfltInterpolator=sitk.sitkNearestNeighbor
         self.dfltuseNearestNeighborExtrapolator=False
 
-    def setImageFromNumpy(self,nparray,refimage=None, spacing=None,origin=None,direction=None):
-        vector=True
-        L=list(range(len(nparray.shape)))
-        L.reverse()
-        o=np.transpose(nparray, L)
-        self.setImageFromNumpyZYX(o,refimage, vector,spacing,origin,direction)
-        return self
-
-    def setImageFromNumpyZYX(self,nparray,refimage=None,spacing=None,origin=None,direction=None):
-        vector=True
-        nda=sitk.GetImageFromArray(nparray, isVector=vector)
+    def setImageFromNumpy(self, nparray, refimage=None, spacing=None, origin=None, direction=None):
+        """
+        Set vector field from numpy array in (Z, Y, X, components) order.
+        
+        For vector fields, the last dimension should be the vector components.
+        For 3D: (Z, Y, X, 3) for a 3-component vector field
+        
+        Args:
+            nparray: Numpy array in (Z, Y, X, components) order
+            refimage: Reference image to copy metadata from
+            spacing: Physical spacing if not using refimage
+            origin: Physical origin if not using refimage
+            direction: Direction matrix if not using refimage
+        
+        Returns:
+            self
+        
+        Note: Changed in v3! Now expects (Z,Y,X,components) to match getImageAsNumpy().
+        """
+        vector = True
+        # Array is already in (Z,Y,X,components), pass directly to sitk.GetImageFromArray
+        nda = sitk.GetImageFromArray(nparray, isVector=vector)
         if refimage:
-            REF=getmeTheSimpleITKImage(refimage)
-            if np.array_equiv(REF.GetSize(),nparray.shape):
+            REF = getmeTheSimpleITKImage(refimage)
+            # For vector images, compare shape without components dimension
+            if len(nparray.shape) > 3:
+                img_shape = nparray.shape[:3]  # (Z,Y,X)
+            else:
+                img_shape = nparray.shape
+            if np.array_equiv(REF.GetSize(), img_shape[::-1]):  # ITK size is (X,Y,Z)
                 nda.CopyInformation(REF)
             else:
-                nda=setSITKImageInforFromImage(nda,REF)
-        elif ((spacing) and (origin) and (direction) ):
-            nda=setSITKImageInfo(nda,spacing=spacing,origin=origin,direction=direction)
+                nda = setSITKImageInforFromImage(nda, REF)
+        elif ((spacing) and (origin) and (direction)):
+            nda = setSITKImageInfo(nda, spacing=spacing, origin=origin, direction=direction)
         elif self.isImageSet():
             if(self.getImage()):
-                r,o,d=getSITKImageInfo(getmeTheSimpleITKImage(self))
-                nda=setSITKImageInfo(nda,spacing=r,origin=o,direction=d)            
-        self.setImage(nda,'image set as numpy array ZYX!!')
+                r, o, d = getSITKImageInfo(getmeTheSimpleITKImage(self))
+                nda = setSITKImageInfo(nda, spacing=r, origin=o, direction=d)            
+        self.setImage(nda, 'vector field set from numpy array (Z,Y,X,components)!')
+        return self
+
+    def setImageFromNumpyZYX(self, nparray, refimage=None, spacing=None, origin=None, direction=None):
+        """
+        Alias for setImageFromNumpy() for explicit clarity.
+        """
+        return self.setImageFromNumpy(nparray, refimage, spacing, origin, direction)
+    
+    def setImageFromNumpyXYZ(self, nparray, refimage=None, spacing=None, origin=None, direction=None):
+        """
+        Set vector field from numpy array in (X, Y, Z, components) order.
+        
+        DEPRECATED: Provided for backward compatibility only.
+        """
+        # Transpose from (X,Y,Z,components) to (Z,Y,X,components)
+        if len(nparray.shape) == 4:  # 3D vector field
+            o = np.transpose(nparray, (2, 1, 0, 3))
+        elif len(nparray.shape) == 3:  # Could be 2D vector or 3D scalar
+            # Assume it's (X,Y,components) for 2D vector
+            o = np.transpose(nparray, (1, 0, 2))
+        else:
+            L = list(range(len(nparray.shape)))
+            L.reverse()
+            o = np.transpose(nparray, L)
+        return self.setImageFromNumpy(o, refimage, spacing, origin, direction)
 
 
 #     def toVtk(self):

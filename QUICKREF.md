@@ -136,5 +136,57 @@ BUGFIX_REPORT.md                     (NEW: Detailed report)
 
 ---
 
+## Handling Oblique Images (NEW in v3)
+
+### Problem: Non-Standard Direction Cosines
+Some medical images have **oblique** acquisitions with rotated direction matrices:
+```python
+# Oblique (e.g., 30° rotation)
+(0.866, 0.5, 0.0, -0.5, 0.866, 0.0, 0.0, 0.0, 1.0)
+
+# vs. Standard axis-aligned
+(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+```
+
+### Solution: New Methods
+
+```python
+# Check if oblique
+if not img.isAxisAligned():
+    # Resample to axis-aligned grid (identity direction matrix)
+    img.resampleToAxisAligned()
+
+# Now direction is (1, 0, 0, 0, 1, 0, 0, 0, 1)
+```
+
+### Complete ML-Ready Pipeline
+
+```python
+from pyable_eros_montin.imaginable import Imaginable
+
+img = Imaginable(imagepath='scan.nii.gz')
+
+# 1. Fix oblique acquisitions
+if not img.isAxisAligned():
+    img.resampleToAxisAligned()  # → identity direction
+
+# 2. Standardize orientation  
+img.reorientToLPS()  # → consistent anatomical axes
+
+# 3. Extract array
+arr = img.getImageAsNumpy()  # (Z,Y,X) with predictable meaning
+```
+
+### Key Methods
+- `isAxisAligned()` - Check if direction is identity matrix
+- `resampleToAxisAligned()` - Resample oblique to axis-aligned (1,0,0, 0,1,0, 0,0,1)
+- `changeImageDirection(direction)` - Resample to custom direction matrix
+- `getOrientationCode()` - Get anatomical orientation ('LPS', 'RAS', etc.)
+- `reorientToLPS/RAS/RPI()` - Reorient to standard anatomical orientation
+
+See `ORIENTATION_GUIDE.md` for detailed examples.
+
+---
+
 **Status: ✅ PRODUCTION READY**  
-*Last Updated: 2025-11-21*
+*Last Updated: 2025-11-26*
