@@ -44,7 +44,7 @@ The plotting system provides **unified visualization** for all data types:
 ### Basic Scalar Image Viewing
 
 ```python
-from pyable_eros_montin import Imaginable
+from pyable import Imaginable
 
 # Load image
 img = Imaginable('brain.nii.gz')
@@ -56,7 +56,7 @@ img.plotOverlay()
 ### Vector Field Viewing
 
 ```python
-from pyable_eros_montin import Vectorable
+from pyable import Vectorable
 
 # Load displacement field
 vf = Vectorable('deformation.mha')
@@ -71,7 +71,7 @@ vf.plotOverlay(component=0)  # X component
 ### Time Series Viewing
 
 ```python
-from pyable_eros_montin import TimeSeriesable
+from pyable import TimeSeriesable
 
 # Load 4D cardiac sequence
 ts = TimeSeriesable('cardiac_4d.nii.gz')
@@ -90,7 +90,7 @@ ts.plotOverlay(frame=5)
 ### Display Single Image
 
 ```python
-from pyable_eros_montin import Imaginable
+from pyable import Imaginable
 
 img = Imaginable('image.nii.gz')
 
@@ -121,7 +121,7 @@ img.plotOverlay(overlay=seg, alpha=0.7)  # More opaque
 ### Custom Colormaps
 
 ```python
-from pyable_eros_montin import ScalarPlotter
+from pyable import ScalarPlotter
 
 img = Imaginable('image.nii.gz')
 overlay = Imaginable('heatmap.nii.gz')
@@ -141,7 +141,7 @@ plotter.show()
 ### Interactive Component Selection
 
 ```python
-from pyable_eros_montin import Vectorable
+from pyable import Vectorable
 
 vf = Vectorable('displacement_field.mha')
 
@@ -203,7 +203,7 @@ vf.plotOverlay(overlay=template, component=0, alpha=0.6)
 ### Interactive Frame Selection
 
 ```python
-from pyable_eros_montin import TimeSeriesable
+from pyable import TimeSeriesable
 
 ts = TimeSeriesable('cardiac_cine.nii.gz')
 
@@ -301,7 +301,7 @@ img.plotOverlay(overlay=seg2, title="Structure 2", alpha=0.6)
 ### Combine Overlays (Manual)
 
 ```python
-from pyable_eros_montin import Imaginable
+from pyable import Imaginable
 import numpy as np
 
 img = Imaginable('image.nii.gz')
@@ -325,7 +325,7 @@ img.plotOverlay(overlay=combined, alpha=0.5)
 ### Saving Figures
 
 ```python
-from pyable_eros_montin import ScalarPlotter
+from pyable import ScalarPlotter
 
 img = Imaginable('image.nii.gz')
 overlay = Imaginable('segmentation.nii.gz')
@@ -341,7 +341,7 @@ plotter.saveFigure('visualization.pdf')
 ### Convenience Function
 
 ```python
-from pyable_eros_montin import plotOverlay, Imaginable
+from pyable import plotOverlay, Imaginable
 
 # Direct function call (not on object)
 img = Imaginable('image.nii.gz')
@@ -353,7 +353,7 @@ viewer = plotOverlay(img, overlay=overlay, alpha=0.6)
 ### Custom Figure Sizes
 
 ```python
-from pyable_eros_montin import ScalarPlotter
+from pyable import ScalarPlotter
 
 img = Imaginable('image.nii.gz')
 
@@ -365,7 +365,7 @@ plotter.show()
 ### Chaining with Processing
 
 ```python
-from pyable_eros_montin import Imaginable
+from pyable import Imaginable
 
 img = Imaginable('raw_image.nii.gz')
 
@@ -494,17 +494,17 @@ plotOverlay(image, overlay=None, alpha=0.5, title=None,
 **Examples**
 ```python
 # Scalar
-from pyable_eros_montin import Imaginable, plotOverlay
+from pyable import Imaginable, plotOverlay
 img = Imaginable('image.nii.gz')
 viewer = plotOverlay(img, title="My Image")
 
 # Vector with component
-from pyable_eros_montin import Vectorable
+from pyable import Vectorable
 vf = Vectorable('displacement.mha')
 viewer = plotOverlay(vf, component=1)  # Y component
 
 # Time series with frame
-from pyable_eros_montin import TimeSeriesable
+from pyable import TimeSeriesable
 ts = TimeSeriesable('cardiac.nii.gz')
 viewer = plotOverlay(ts, frame=10)  # Frame 10
 ```

@@ -11,7 +11,7 @@ Successfully integrated three powerful utilities from the `d2/` directory into p
 ### Basic Usage
 
 ```python
-from pyable_eros_montin import Imaginable
+from pyable import Imaginable
 
 # Load image
 img = Imaginable('mri_scan.nii.gz')
@@ -53,7 +53,7 @@ result = img.extractRepresentativeSlices(planes='all', offsets=[-5, 0, 5])
 labels = [f"{name} ({offset}mm)" for name, offset in result['plane_names']]
 
 # Plot in grid
-from pyable_eros_montin import GridPlotter
+from pyable import GridPlotter
 grid = GridPlotter()
 grid.show_grid(result['slices'], titles=labels)
 ```
@@ -67,7 +67,7 @@ grid.show_grid(result['slices'], titles=labels)
 ### Basic Usage
 
 ```python
-from pyable_eros_montin import processImageDirectory
+from pyable import processImageDirectory
 
 def analyze_image(img):
     """Processor function that returns analysis dict."""
@@ -109,7 +109,7 @@ print(df.head())
 ```python
 # Complex processor that extracts multiple metrics
 def detailed_processor(img):
-    from pyable_eros_montin import plotable
+    from pyable import plotable
     slices = img.extractRepresentativeSlices(planes=[2])
     arr = img.getImageAsNumpy()
     
@@ -145,7 +145,7 @@ large_volumes = df.sort_values('volume_mm3', ascending=False).head(10)
 ### Basic Usage
 
 ```python
-from pyable_eros_montin import GridPlotter
+from pyable import GridPlotter
 import numpy as np
 
 # Create grid plotter
@@ -217,7 +217,7 @@ grid.show_grid(slices)  # Auto-calculates best grid size
 Combining all three utilities in a real-world workflow:
 
 ```python
-from pyable_eros_montin import Imaginable, processImageDirectory, GridPlotter
+from pyable import Imaginable, processImageDirectory, GridPlotter
 
 # Step 1: Define analysis function using slice extraction
 def analyze_and_visualize(img):

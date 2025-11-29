@@ -1,5 +1,5 @@
 
-from pyable_eros_montin import imaginable as ima
+from pyable import imaginable as ima
 
 A=ima.Imaginable('/data/MYDATA/HIPreconstructions/LeftRight111/input/Rightp10.nii.gz')
 A.writeImageAs('/home/eros/Desktop/Segm/Rightp10.mha')

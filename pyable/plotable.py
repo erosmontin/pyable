@@ -14,7 +14,7 @@ Functions:
     - plotOverlay: Convenience function for plotting with overlays
     
 Example:
-    >>> from pyable_eros_montin import Imaginable, Vectorable
+    >>> from pyable import Imaginable, Vectorable
     >>> img = Imaginable('image.nii.gz')
     >>> img.plotOverlay('overlay.nii.gz')
     >>> 
@@ -281,7 +281,7 @@ class ScalarPlotter(PlotViewer):
     
     Example
     -------
-    >>> from pyable_eros_montin import Imaginable
+    >>> from pyable import Imaginable
     >>> img = Imaginable('image.nii.gz')
     >>> overlay = Imaginable('segmentation.nii.gz')
     >>> plotter = ScalarPlotter(img.getImage(), overlay.getImage())
@@ -330,7 +330,7 @@ class VectorPlotter(PlotViewer):
     
     Example
     -------
-    >>> from pyable_eros_montin import Vectorable
+    >>> from pyable import Vectorable
     >>> vf = Vectorable('displacement_field.mha')
     >>> vf.plotOverlay()  # Interactive component selector
     """
@@ -477,7 +477,7 @@ class TimeSeriesPlotter(PlotViewer):
     
     Example
     -------
-    >>> from pyable_eros_montin import TimeSeriesable
+    >>> from pyable import TimeSeriesable
     >>> ts = TimeSeriesable('cardiac_4d.nii.gz')
     >>> ts.plotOverlay()  # Interactive frame selector
     """
@@ -824,7 +824,7 @@ def plotOverlay(image: Union[sitk.Image, 'Imaginable', 'Vectorable', 'TimeSeries
     --------
     **Scalar images:**
     
-    >>> from pyable_eros_montin import Imaginable, plotOverlay
+    >>> from pyable import Imaginable, plotOverlay
     >>> img = Imaginable('image.nii.gz')
     >>> overlay = Imaginable('segmentation.nii.gz')
     >>> plotOverlay(img, overlay, alpha=0.6)
@@ -835,14 +835,14 @@ def plotOverlay(image: Union[sitk.Image, 'Imaginable', 'Vectorable', 'TimeSeries
     
     **Vector fields with component selection:**
     
-    >>> from pyable_eros_montin import Vectorable
+    >>> from pyable import Vectorable
     >>> vf = Vectorable('displacement.mha')
     >>> vf.plotOverlay()  # Interactive component selector
     >>> vf.plotOverlay(component=0)  # Show X component directly
     
     **Time series with frame selection:**
     
-    >>> from pyable_eros_montin import TimeSeriesable
+    >>> from pyable import TimeSeriesable
     >>> ts = TimeSeriesable('cardiac_4d.nii.gz')
     >>> ts.plotOverlay()  # Interactive frame selector
     >>> ts.plotOverlay(frame=5)  # Show 6th frame directly

@@ -24,7 +24,7 @@ Successfully integrated three high-value utilities from the `d2/` directory into
 
 **Source**: Adapted from `d2/common.py:sliceImages()`
 
-**Location**: `pyable_eros_montin/imaginable.py` (lines 1463-1575)
+**Location**: `pyable/imaginable.py` (lines 1463-1575)
 
 **Features**:
 - Extract 2D slices from 3 orthogonal planes (sagittal, coronal, axial)
@@ -53,7 +53,7 @@ def extractRepresentativeSlices(self, planes='all', offsets=[-10, 0, 10], verbos
 
 **Source**: Adapted from `d2/read_dir.py:read_category_files()`
 
-**Location**: `pyable_eros_montin/utils.py` (lines 203-283)
+**Location**: `pyable/utils.py` (lines 203-283)
 
 **Features**:
 - Recursive directory traversal with glob pattern matching
@@ -82,7 +82,7 @@ def processImageDirectory(directory, processor_func, file_pattern='*.nii.gz',
 
 **Source**: Adapted from `d2/subdivide_sequences_data.py` UI
 
-**Location**: `pyable_eros_montin/plotable.py` (lines 628-777)
+**Location**: `pyable/plotable.py` (lines 628-777)
 
 **Features**:
 - Display multiple 2D slices in customizable grid
@@ -157,7 +157,7 @@ $ pytest tests/test_plotable.py -v
 
 ## API Exports
 
-### Updated `pyable_eros_montin/__init__.py`
+### Updated `pyable/__init__.py`
 
 **New imports**:
 ```python
@@ -177,7 +177,7 @@ __all__ = [
 
 **Public API**: All new features accessible from main package
 ```python
-from pyable_eros_montin import GridPlotter, processImageDirectory
+from pyable import GridPlotter, processImageDirectory
 ```
 
 ---
@@ -256,20 +256,20 @@ except:
 ## Files Modified
 
 ### Core Implementation
-1. **pyable_eros_montin/imaginable.py**
+1. **pyable/imaginable.py**
    - Added `extractRepresentativeSlices()` method (113 lines)
    - Integrated with existing class hierarchy
 
-2. **pyable_eros_montin/utils.py**
+2. **pyable/utils.py**
    - Added `processImageDirectory()` function (81 lines)
    - Uses existing imports effectively
 
-3. **pyable_eros_montin/plotable.py**
+3. **pyable/plotable.py**
    - Added `GridPlotter` class (150 lines)
    - Follows existing design patterns
    - Consistent with other plotter classes
 
-4. **pyable_eros_montin/__init__.py**
+4. **pyable/__init__.py**
    - Updated imports (2 lines added)
    - Updated __all__ (2 entries added)
 

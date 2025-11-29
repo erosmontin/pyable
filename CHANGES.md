@@ -7,7 +7,7 @@ All changes made to pyable package on November 21, 2025 during comprehensive bug
 
 ## SOURCE CODE CHANGES
 
-### File 1: `pyable_eros_montin/meshable.py`
+### File 1: `pyable/meshable.py`
 **Status:** ✅ Fixed  
 **Changes:** Removed duplicate function definition + Added missing import
 
@@ -24,7 +24,7 @@ from vtk.util import numpy_support
 
 ---
 
-### File 2: `pyable_eros_montin/imaginable.py`
+### File 2: `pyable/imaginable.py`
 **Status:** ✅ Fixed  
 **Changes:** 20 changes (+13 insertions, -7 deletions)
 
@@ -148,7 +148,7 @@ def getCenterOfGravityIndex(self):
 
 ---
 
-### File 3: `pyable_eros_montin/utilizers.py`
+### File 3: `pyable/utilizers.py`
 **Status:** ✅ Fixed  
 **Changes:** 2 changes (+1 insertion, -1 deletion)
 
@@ -263,9 +263,9 @@ if (r is not None) and (t is not None):
 ```
 3 files changed, 13 insertions(+), 59 deletions(-)
 
-pyable_eros_montin/imaginable.py | 20 +++++++++-------
-pyable_eros_montin/meshable.py   | 50 ----------------------------------------
-pyable_eros_montin/utilizers.py  |  2 +-
+pyable/imaginable.py | 20 +++++++++-------
+pyable/meshable.py   | 50 ----------------------------------------
+pyable/utilizers.py  |  2 +-
 ```
 
 ---

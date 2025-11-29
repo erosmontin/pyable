@@ -45,7 +45,7 @@ def renderIsosurface(self, isosurface_value=None, component_index=0, time_index=
 Render an MRI scan at its mean intensity:
 
 ```python
-from pyable_eros_montin import SITKImaginable
+from pyable import SITKImaginable
 
 # Load image
 img = SITKImaginable('mri_scan.nii.gz')
@@ -68,7 +68,7 @@ img.renderIsosurface(isosurface_value=100, color=(0.0, 1.0, 0.0))
 Render the boundary of a binary segmentation:
 
 ```python
-from pyable_eros_montin import Roiable
+from pyable import Roiable
 
 # Load ROI
 roi = Roiable('segmentation.nii.gz')
@@ -101,7 +101,7 @@ actor3, _, _ = img.renderIsosurface(isosurface_value=max_val*0.8, show=False,
 Render the magnitude of a displacement field:
 
 ```python
-from pyable_eros_montin import Fieldable
+from pyable import Fieldable
 
 # Load displacement field
 df = SITKImaginable('displacement_field.nii.gz')  # Contains magnitude

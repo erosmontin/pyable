@@ -16,7 +16,7 @@ import argparse
 # Add project root to path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from pyable_eros_montin.imaginable import Roiable, SITKImaginable
+from pyable.imaginable import Roiable, SITKImaginable
 import SimpleITK as sitk
 
 ROI_PATH = "/media/erosm/DATA/aging20/DATA/HCP/HCA6002236_V1_MR/aparc+aseg.nii.gz"

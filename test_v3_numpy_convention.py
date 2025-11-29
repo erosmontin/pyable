@@ -6,7 +6,7 @@ import SimpleITK as sitk
 import sys
 sys.path.insert(0, '/home/erosm/pyable')
 
-from pyable_eros_montin import SITKImaginable
+from pyable import SITKImaginable
 
 print("=" * 70)
 print("PyAble v3 - Testing New (Z,Y,X) Convention")

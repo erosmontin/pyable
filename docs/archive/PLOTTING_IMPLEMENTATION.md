@@ -4,7 +4,7 @@ This file is an archived top-level copy of the plotting implementation. The cano
 
 Summary (archived):
 
-- Module: `pyable_eros_montin/plotable.py`
+- Module: `pyable/plotable.py`
 - Key classes: `PlotViewer`, `ScalarPlotter`, `VectorPlotter`, `TimeSeriesPlotter`
 - Main convenience: `plotOverlay()` available on Imaginable/Vectorable/TimeSeriesable classes
 - Features: Matplotlib-based interactive viewers, overlay resampling, slice/component/frame selectors, alpha blending, figure saving

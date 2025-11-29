@@ -17,13 +17,13 @@ import SimpleITK as sitk
 
 # Import pyable modules
 try:
-    from pyable_eros_montin import SITKImaginable, Roiable, LabelMapable
-    from pyable_eros_montin import deformations
+    from pyable import SITKImaginable, Roiable, LabelMapable
+    from pyable import deformations
 except ImportError:
     import sys
     sys.path.insert(0, str(Path(__file__).parent.parent))
-    from pyable_eros_montin import SITKImaginable, Roiable, LabelMapable
-    from pyable_eros_montin import deformations
+    from pyable import SITKImaginable, Roiable, LabelMapable
+    from pyable import deformations
 
 
 class TestDeformationFieldInitialization(unittest.TestCase):

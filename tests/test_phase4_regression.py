@@ -139,7 +139,7 @@ def run_test_suite():
 
 def validate_no_duplicates():
     """Check that duplicate vtk2sitk function is removed"""
-    with open('/home/erosm/pyable/pyable_eros_montin/meshable.py', 'r') as f:
+    with open('/home/erosm/pyable/pyable/meshable.py', 'r') as f:
         content = f.read()
     # Count occurrences of function definition
     count = content.count('def vtk2sitk(')
@@ -147,21 +147,21 @@ def validate_no_duplicates():
 
 def validate_f_strings():
     """Check that f-strings are used for formatting"""
-    with open('/home/erosm/pyable/pyable_eros_montin/imaginable.py', 'r') as f:
+    with open('/home/erosm/pyable/pyable/imaginable.py', 'r') as f:
         content = f.read()
     # Check that bad pattern is gone and f-strings are used
     return 'f"Can\'t {message}"' in content or "f'Can't {message}'" in content
 
 def validate_operators():
     """Check that bitwise & is replaced with 'and' in boolean context"""
-    with open('/home/erosm/pyable/pyable_eros_montin/utilizers.py', 'r') as f:
+    with open('/home/erosm/pyable/pyable/utilizers.py', 'r') as f:
         content = f.read()
     # Check that fix is applied
     return "(r is not None) and (t is not None)" in content
 
 def validate_spelling():
     """Check that spelling errors are fixed"""
-    with open('/home/erosm/pyable/pyable_eros_montin/imaginable.py', 'r') as f:
+    with open('/home/erosm/pyable/pyable/imaginable.py', 'r') as f:
         content = f.read()
     # Check typos are fixed
     has_typos = "tyoe" in content or "shuld" in content or "pleae" in content
@@ -170,21 +170,21 @@ def validate_spelling():
 
 def validate_mergelabels_scope():
     """Check that LABELMAP is initialized before use"""
-    with open('/home/erosm/pyable/pyable_eros_montin/imaginable.py', 'r') as f:
+    with open('/home/erosm/pyable/pyable/imaginable.py', 'r') as f:
         content = f.read()
     # Check for proper initialization
     return "LABELMAP = None" in content and "if LABELMAP is None:" in content
 
 def validate_nan_comparison():
     """Check that NaN comparison uses np.isnan()"""
-    with open('/home/erosm/pyable/pyable_eros_montin/imaginable.py', 'r') as f:
+    with open('/home/erosm/pyable/pyable/imaginable.py', 'r') as f:
         content = f.read()
     # Check that bad pattern is gone and good one is present
     return "==np.NaN" not in content and "np.isnan(" in content
 
 def validate_method_names():
     """Check that method name is fixed"""
-    with open('/home/erosm/pyable/pyable_eros_montin/imaginable.py', 'r') as f:
+    with open('/home/erosm/pyable/pyable/imaginable.py', 'r') as f:
         content = f.read()
     # Check that bad name is gone and good name is present
     return "getCenterOfGravitygetCenterOfGravityIndex" not in content and "getCenterOfGravityIndex" in content
@@ -197,7 +197,7 @@ def validate_method_names():
 def test_import_imaginable():
     """Test importing Imaginable class"""
     try:
-        from pyable_eros_montin.imaginable import Imaginable, SITKImaginable
+        from pyable.imaginable import Imaginable, SITKImaginable
         return True
     except Exception as e:
         print(f"  Error: {e}")
@@ -206,7 +206,7 @@ def test_import_imaginable():
 def test_import_roiable():
     """Test importing Roiable class (lowercase 'oi')"""
     try:
-        from pyable_eros_montin.imaginable import Roiable
+        from pyable.imaginable import Roiable
         return True
     except Exception as e:
         print(f"  Error: {e}")
@@ -215,7 +215,7 @@ def test_import_roiable():
 def test_import_labelmapable():
     """Test importing LabelMapable class"""
     try:
-        from pyable_eros_montin.imaginable import LabelMapable
+        from pyable.imaginable import LabelMapable
         return True
     except Exception as e:
         print(f"  Error: {e}")
@@ -224,7 +224,7 @@ def test_import_labelmapable():
 def test_import_vtk_converters():
     """Test importing VTK converter functions"""
     try:
-        from pyable_eros_montin.meshable import vtk2sitk, sitk2vtk
+        from pyable.meshable import vtk2sitk, sitk2vtk
         return True
     except Exception as e:
         print(f"  Error: {e}")
@@ -234,7 +234,7 @@ def test_basic_image_creation():
     """Test creating basic image"""
     try:
         import SimpleITK as sitk
-        from pyable_eros_montin.imaginable import SITKImaginable
+        from pyable.imaginable import SITKImaginable
         
         img = sitk.Image([50, 50, 50], sitk.sitkUInt8)
         imaginable = SITKImaginable(image=img)
@@ -247,7 +247,7 @@ def test_image_operations():
     """Test basic image operations"""
     try:
         import SimpleITK as sitk
-        from pyable_eros_montin.imaginable import SITKImaginable
+        from pyable.imaginable import SITKImaginable
         
         img = sitk.Image([50, 50, 50], sitk.sitkFloat32)
         imaginable = SITKImaginable(image=img)
@@ -267,7 +267,7 @@ def test_roi_operations():
     """Test ROI-specific operations"""
     try:
         import SimpleITK as sitk
-        from pyable_eros_montin.imaginable import Roiable
+        from pyable.imaginable import Roiable
         
         # Create non-empty image with label
         img = sitk.Image([50, 50, 50], sitk.sitkUInt8)
@@ -289,7 +289,7 @@ def test_roi_operations():
 def test_core_api_compatibility():
     """Test that core API remains unchanged"""
     try:
-        from pyable_eros_montin.imaginable import (
+        from pyable.imaginable import (
             Imaginable, SITKImaginable, Roiable, 
             LabelMapable, Fieldable
         )
@@ -316,7 +316,7 @@ def test_core_api_compatibility():
 def test_class_hierarchy():
     """Test class hierarchy is intact"""
     try:
-        from pyable_eros_montin.imaginable import (
+        from pyable.imaginable import (
             Imaginable, SITKImaginable, Roiable,
             LabelMapable, Fieldable
         )
@@ -345,7 +345,7 @@ def test_existing_methods():
     """Test that existing methods still work"""
     try:
         import SimpleITK as sitk
-        from pyable_eros_montin.imaginable import SITKImaginable
+        from pyable.imaginable import SITKImaginable
         
         img = sitk.Image([30, 30, 30], sitk.sitkUInt8)
         obj = SITKImaginable(image=img)

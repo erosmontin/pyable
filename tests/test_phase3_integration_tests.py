@@ -16,8 +16,8 @@ import tempfile
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from pyable_eros_montin.imaginable import Imaginable, SITKImaginable, ROIable, LabelMapable
-from pyable_eros_montin.meshable import vtk2sitk, sitk2vtk
+from pyable.imaginable import Imaginable, SITKImaginable, ROIable, LabelMapable
+from pyable.meshable import vtk2sitk, sitk2vtk
 
 try:
     import vtk

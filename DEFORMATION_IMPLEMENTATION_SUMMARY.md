@@ -10,7 +10,7 @@ Comprehensive deformation and registration module for pyable enabling easy appli
 
 ## What Was Implemented
 
-### 1. Core Deformation Module (`pyable_eros_montin/deformations.py`)
+### 1. Core Deformation Module (`pyable/deformations.py`)
 
 **~650 lines of production code**
 
@@ -158,7 +158,7 @@ OK ✅
 ### Simple Image Warping
 
 ```python
-from pyable_eros_montin import SITKImaginable
+from pyable import SITKImaginable
 
 img = SITKImaginable('moving.nii.gz')
 img.applyDisplacementField('deformation.mha', target_image='fixed.nii.gz')
@@ -168,7 +168,7 @@ img.write('warped.nii.gz')
 ### ROI Warping
 
 ```python
-from pyable_eros_montin import Roiable
+from pyable import Roiable
 
 roi = Roiable('segmentation.nii.gz')
 roi.warpROI('deformation.mha')
@@ -178,7 +178,7 @@ roi.write('warped_roi.nii.gz')
 ### Multi-Step Registration
 
 ```python
-from pyable_eros_montin.deformations import apply_multi_step_transform
+from pyable.deformations import apply_multi_step_transform
 
 result = apply_multi_step_transform(
     'moving.nii.gz',
@@ -190,7 +190,7 @@ result = apply_multi_step_transform(
 ### Atlas-Based Segmentation
 
 ```python
-from pyable_eros_montin import LabelMapable
+from pyable import LabelMapable
 
 atlas_labels = LabelMapable('atlas_labels.nii.gz')
 atlas_labels.warpLabelMap('template_to_patient.mha', 
@@ -203,7 +203,7 @@ atlas_labels.write('patient_segmentation.nii.gz')
 ## File Structure
 
 ```
-pyable_eros_montin/
+pyable/
 ├── __init__.py ✨ NEW - Module exports
 ├── deformations.py ✨ NEW - Core deformation module (650 lines)
 ├── imaginable.py ✏️ MODIFIED - Added 5 deformation methods

@@ -1,5 +1,5 @@
 import SimpleITK as sitk
-from pynico_eros_montin import pynico as pn
+from pynico import pynico as pn
 
 from .imaginable import Roiable
 

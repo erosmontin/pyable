@@ -17,7 +17,7 @@ import SimpleITK as sitk
 # Add parent directory to path
 sys.path.insert(0, '/home/erosm/pyable')
 
-from pyable_eros_montin.imaginable import Imaginable, Roiable, SITKImaginable, Fieldable
+from pyable.imaginable import Imaginable, Roiable, SITKImaginable, Fieldable
 
 
 def create_synthetic_volume():

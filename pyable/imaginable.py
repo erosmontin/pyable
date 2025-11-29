@@ -1,5 +1,5 @@
 import numbers
-from pynico_eros_montin import pynico as pn
+from pynico import pynico as pn
 import SimpleITK as sitk
 import numpy as np
 import copy
@@ -12,7 +12,7 @@ except:
     try:
         from utils import *
     except:
-        from pyable_eros_montin.utils import *
+        from pyable.utils import *
         
 from skimage import data, filters, measure, morphology
 import itertools

@@ -19,7 +19,7 @@ Modules:
     - utils: Helper functions
 
 Example:
-    >>> from pyable_eros_montin import SITKImaginable, Roiable, LabelMapable
+    >>> from pyable import SITKImaginable, Roiable, LabelMapable
     >>> 
     >>> # Load and manipulate image
     >>> img = SITKImaginable('image.nii.gz')

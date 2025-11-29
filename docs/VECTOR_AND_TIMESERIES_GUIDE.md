@@ -53,7 +53,7 @@ Both `Vectorable` and `TimeSeriesable` **inherit from `Imaginable`**, providing:
 ### Basic Usage
 
 ```python
-from pyable_eros_montin import Vectorable
+from pyable import Vectorable
 
 # Load vector field (displacement field, velocity field, etc.)
 vf = Vectorable('displacement_field.mha')
@@ -181,7 +181,7 @@ vf.write('transformed_vf.mha')
 ### Basic Usage
 
 ```python
-from pyable_eros_montin import TimeSeriesable
+from pyable import TimeSeriesable
 
 # Load 4D image (e.g., cardiac cine, dynamic MRI)
 ts = TimeSeriesable('cardiac_4d.nii.gz')
@@ -280,7 +280,7 @@ ts.applyFilterToAllFrames('gaussian', sigma=1.0)\
 ### Operation: Extract and Process Single Frame
 
 ```python
-from pyable_eros_montin import TimeSeriesable, Imaginable
+from pyable import TimeSeriesable, Imaginable
 
 ts = TimeSeriesable('dynamic_mri.nii.gz')
 
@@ -338,7 +338,7 @@ min_image = sitk.GetImageFromArray(min_ip)
 ### Workflow 1: Motion Correction in Time Series
 
 ```python
-from pyable_eros_montin import TimeSeriesable
+from pyable import TimeSeriesable
 
 # Load dynamic series
 ts = TimeSeriesable('uncorrected_4d.nii.gz')
@@ -355,7 +355,7 @@ ts.write('motion_corrected_4d.nii.gz')
 ### Workflow 2: Vector Field Manipulation
 
 ```python
-from pyable_eros_montin import Vectorable
+from pyable import Vectorable
 
 # Load displacement field
 vf = Vectorable('forward_displacement.mha')
@@ -436,7 +436,7 @@ for i in range(ts.getNumberOfFrames()):
 
 ```python
 import glob
-from pyable_eros_montin import TimeSeriesable
+from pyable import TimeSeriesable
 
 # Process all 4D files in directory
 for filepath in glob.glob('cardiac_data/*.nii.gz'):

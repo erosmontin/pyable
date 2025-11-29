@@ -12,7 +12,7 @@ import numpy as np
 
 
 
-from pynico_eros_montin import pynico as pn
+from pynico import pynico as pn
 
 if __name__=="__main__":
     # FN='/g/LeftRight111/input/Leftp03-1.nii.gz'

@@ -18,7 +18,7 @@ The `InteractiveViewer` provides a comprehensive GUI for medical image visualiza
 ### Basic Usage - Scalar Image
 
 ```python
-from pyable_eros_montin import Imaginable
+from pyable import Imaginable
 
 # Load image
 img = Imaginable('image.nii.gz')
@@ -51,7 +51,7 @@ img.viewInteractive(overlays=[seg1, seg2], orientation=0)
 ### Vector Field with Component Selection
 
 ```python
-from pyable_eros_montin import Vectorable
+from pyable import Vectorable
 
 vf = Vectorable('displacement_field.mha')
 img = Imaginable('reference.nii.gz')
@@ -63,7 +63,7 @@ vf.viewInteractive(overlays=img, component=0, orientation=2)
 ### Time Series with Frame Navigation
 
 ```python
-from pyable_eros_montin import TimeSeriesable
+from pyable import TimeSeriesable
 
 ts = TimeSeriesable('cardiac_4d.nii.gz')
 roi = Imaginable('roi_mask.nii.gz')
@@ -356,7 +356,7 @@ For advanced users, the `InteractiveViewer` class can be used directly:
 ### Basic Usage
 
 ```python
-from pyable_eros_montin import InteractiveViewer
+from pyable import InteractiveViewer
 import SimpleITK as sitk
 
 # Create from SimpleITK image
@@ -374,7 +374,7 @@ viewer.show()
 ### OverlayManager (Direct Control)
 
 ```python
-from pyable_eros_montin import OverlayManager
+from pyable import OverlayManager
 
 manager = OverlayManager()
 

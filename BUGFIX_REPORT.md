@@ -254,18 +254,18 @@ Status: ✅ PRODUCTION READY
 ## Files Modified
 
 ### Core Source Files:
-1. **`pyable_eros_montin/meshable.py`**
+1. **`pyable/meshable.py`**
    - ✅ Removed duplicate `vtk2sitk()` function
    - ✅ Added missing `numpy_support` import
 
-2. **`pyable_eros_montin/imaginable.py`**
+2. **`pyable/imaginable.py`**
    - ✅ Fixed f-string formatting (2 instances)
    - ✅ Fixed NaN comparison (1 instance)
    - ✅ Fixed variable scope in `mergeLabels()` (1 method)
    - ✅ Fixed method name concatenation (1 method)
    - ✅ Fixed spelling/typos (3 instances)
 
-3. **`pyable_eros_montin/utilizers.py`**
+3. **`pyable/utilizers.py`**
    - ✅ Fixed bitwise operator precedence (1 instance)
 
 ### Test Files Created:

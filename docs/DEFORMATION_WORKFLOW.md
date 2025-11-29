@@ -20,7 +20,7 @@ Complete guide to applying registration transforms and displacement fields to Im
 ### Apply a Transform to an Image
 
 ```python
-from pyable_eros_montin import SITKImaginable
+from pyable import SITKImaginable
 
 # Load image and apply registration transform
 image = SITKImaginable('moving_image.nii.gz')
@@ -40,7 +40,7 @@ image.write('warped_image.nii.gz')
 ### Warp a Segmentation/ROI
 
 ```python
-from pyable_eros_montin import Roiable, LabelMapable
+from pyable import Roiable, LabelMapable
 
 # Warp ROI with label preservation (nearest-neighbor)
 roi = Roiable('segmentation.nii.gz')
@@ -115,7 +115,7 @@ image.applyDisplacementField('deformation.mha', target_image='fixed.nii.gz')
 
 **Usage**:
 ```python
-from pyable_eros_montin.deformations import apply_multi_step_transform
+from pyable.deformations import apply_multi_step_transform
 
 result = apply_multi_step_transform(
     'moving.nii.gz',
@@ -188,7 +188,7 @@ image.applyTransform('transform.tfm', default_value=-1)
 Apply rigid → affine → deformable in sequence:
 
 ```python
-from pyable_eros_montin.deformations import (
+from pyable.deformations import (
     apply_multi_step_transform,
     create_composite_transform
 )
@@ -214,7 +214,7 @@ result = apply_multi_step_transform(
 Verify registration quality by checking forward-backward consistency:
 
 ```python
-from pyable_eros_montin.deformations import apply_inverted_deformation_field
+from pyable.deformations import apply_inverted_deformation_field
 
 # Apply forward transformation
 moving = SITKImaginable('moving.nii.gz')
@@ -248,7 +248,7 @@ moving.applyDisplacementField('backward_deform.mha')
 For multi-resolution registration refinement:
 
 ```python
-from pyable_eros_montin.deformations import refine_bspline_grid
+from pyable.deformations import refine_bspline_grid
 import SimpleITK as sitk
 
 # Load coarse B-spline transform
@@ -299,7 +299,7 @@ print(f"Fixed: size={fixed.getImageSize()}, spacing={fixed.getImageSpacing()}")
 
 ```python
 import glob
-from pyable_eros_montin import SITKImaginable
+from pyable import SITKImaginable
 
 # Register all images in a dataset
 moving_images = glob.glob('data/moving/*.nii.gz')
@@ -313,7 +313,7 @@ for moving_path in moving_images:
 ### Warp All Segmentations
 
 ```python
-from pyable_eros_montin import LabelMapable
+from pyable import LabelMapable
 
 # Warp all label maps to patient space
 label_maps = glob.glob('templates/organs/*.nii.gz')
@@ -428,7 +428,7 @@ labels.warpLabelMap('deform.mha')  # ✓ Automatically uses nearest-neighbor
 ### Issue: Displacement field has wrong geometry
 
 ```python
-from pyable_eros_montin.deformations import align_geometry
+from pyable.deformations import align_geometry
 
 # Fix geometry from reference
 df = SITKImaginable('deform.mha')
@@ -457,7 +457,7 @@ tfm = sitk.ReadTransform('transform.tfm')
 ## Complete Example: Atlas-Based Segmentation
 
 ```python
-from pyable_eros_montin import SITKImaginable, LabelMapable
+from pyable import SITKImaginable, LabelMapable
 from pathlib import Path
 
 def atlas_based_segmentation(patient_image, atlas_image, atlas_labels):

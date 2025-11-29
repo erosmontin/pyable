@@ -143,10 +143,10 @@ pytest tests/test_plotable.py -v
 ### Files Modified
 | File | Changes | Purpose |
 |------|---------|---------|
-| `pyable_eros_montin/imaginable.py` | +113 lines | Add `extractRepresentativeSlices()` |
-| `pyable_eros_montin/utils.py` | +81 lines | Add `processImageDirectory()` |
-| `pyable_eros_montin/plotable.py` | +150 lines | Add `GridPlotter` class |
-| `pyable_eros_montin/__init__.py` | +2 lines | Export new features |
+| `pyable/imaginable.py` | +113 lines | Add `extractRepresentativeSlices()` |
+| `pyable/utils.py` | +81 lines | Add `processImageDirectory()` |
+| `pyable/plotable.py` | +150 lines | Add `GridPlotter` class |
+| `pyable/__init__.py` | +2 lines | Export new features |
 | `tests/test_plotable.py` | +370 lines | 24 new unit tests |
 
 ### Documentation Created
@@ -183,7 +183,7 @@ pytest tests/test_plotable.py -v
 
 ```python
 # 1. Import
-from pyable_eros_montin import Imaginable, GridPlotter, processImageDirectory
+from pyable import Imaginable, GridPlotter, processImageDirectory
 
 # 2. Slice extraction
 img = Imaginable('scan.nii.gz')
@@ -239,7 +239,7 @@ grid.show_grid(slices, titles=['Slice A', 'Slice B', ...])
 
 ### To Contribute
 - Run tests: `pytest tests/test_plotable.py`
-- Read code in `pyable_eros_montin/`
+- Read code in `pyable/`
 - Check design decisions in [D2_INTEGRATION_SUMMARY.md](D2_INTEGRATION_SUMMARY.md)
 
 ---
@@ -282,7 +282,7 @@ grid.show_grid(slices, titles=['Slice A', 'Slice B', ...])
 
 ```
 pyable/
-├── pyable_eros_montin/
+├── pyable/
 │   ├── imaginable.py              ← extractRepresentativeSlices()
 │   ├── utils.py                   ← processImageDirectory()
 │   ├── plotable.py                ← GridPlotter class

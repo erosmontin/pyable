@@ -10,7 +10,7 @@ import SimpleITK as sitk
 
 sys.path.insert(0, '/home/erosm/pyable')
 
-from pyable_eros_montin.imaginable import SITKImaginable, Roiable
+from pyable.imaginable import SITKImaginable, Roiable
 
 
 def example_1_continuous_image():

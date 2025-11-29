@@ -190,7 +190,7 @@ value = arr[k, j, i]
 
 ```python
 import torch
-from pyable_eros_montin import SITKImaginable
+from pyable import SITKImaginable
 
 # Load image
 img = SITKImaginable('scan.nii.gz')
@@ -255,7 +255,7 @@ Run this test to verify your code works with v3:
 
 ```python
 import numpy as np
-from pyable_eros_montin import SITKImaginable
+from pyable import SITKImaginable
 
 # Create test image
 arr_zyx = np.random.rand(10, 20, 30).astype(np.float32)

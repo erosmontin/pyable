@@ -105,7 +105,7 @@ img.setImageDirection((1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0))
 
 ```python
 import numpy as np
-from pyable_eros_montin.imaginable import Imaginable
+from pyable.imaginable import Imaginable
 
 # Create image with marker at corner
 array = np.zeros((10, 20, 30))

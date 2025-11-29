@@ -15,15 +15,15 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 try:
-    from pyable_eros_montin import (
+    from pyable import (
         Imaginable, Vectorable, TimeSeriesable,
         PlotViewer, ScalarPlotter, VectorPlotter, TimeSeriesPlotter,
         plotOverlay
     )
 except ImportError:
-    from pyable_eros_montin.imaginable import Imaginable
-    from pyable_eros_montin.vectorable import Vectorable, TimeSeriesable
-    from pyable_eros_montin.plotable import (
+    from pyable.imaginable import Imaginable
+    from pyable.vectorable import Vectorable, TimeSeriesable
+    from pyable.plotable import (
         PlotViewer, ScalarPlotter, VectorPlotter, TimeSeriesPlotter,
         plotOverlay
     )
@@ -583,9 +583,9 @@ class TestBatchProcessing:
             return {'size': img.getImageSize(), 'spacing': img.getImageSpacing()}
         
         try:
-            from pyable_eros_montin.utils import processImageDirectory
+            from pyable.utils import processImageDirectory
         except ImportError:
-            from pyable_eros_montin.utils import processImageDirectory
+            from pyable.utils import processImageDirectory
         
         df = processImageDirectory(
             str(tmp_path), processor,
@@ -610,9 +610,9 @@ class TestBatchProcessing:
             return {'size': img.getImageSize()}
         
         try:
-            from pyable_eros_montin.utils import processImageDirectory
+            from pyable.utils import processImageDirectory
         except ImportError:
-            from pyable_eros_montin.utils import processImageDirectory
+            from pyable.utils import processImageDirectory
         
         output_csv = tmp_path / "results.csv"
         df = processImageDirectory(
@@ -629,9 +629,9 @@ class TestBatchProcessing:
     def test_process_directory_empty_folder(self, tmp_path):
         """Test with empty directory."""
         try:
-            from pyable_eros_montin.utils import processImageDirectory
+            from pyable.utils import processImageDirectory
         except ImportError:
-            from pyable_eros_montin.utils import processImageDirectory
+            from pyable.utils import processImageDirectory
         
         def processor(img):
             return {}
@@ -647,9 +647,9 @@ class TestBatchProcessing:
     def test_process_directory_nonexistent(self):
         """Test with nonexistent directory."""
         try:
-            from pyable_eros_montin.utils import processImageDirectory
+            from pyable.utils import processImageDirectory
         except ImportError:
-            from pyable_eros_montin.utils import processImageDirectory
+            from pyable.utils import processImageDirectory
         
         def processor(img):
             return {}
@@ -672,9 +672,9 @@ class TestGridPlotter:
     def test_gridplotter_basic(self):
         """Test basic grid plotter creation."""
         try:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         except ImportError:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         
         grid = GridPlotter()
         assert grid.fig is None
@@ -683,9 +683,9 @@ class TestGridPlotter:
     def test_gridplotter_show_grid(self):
         """Test showing grid of slices."""
         try:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         except ImportError:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         
         # Create test slices
         slices = [np.random.rand(50, 50) for _ in range(6)]
@@ -700,9 +700,9 @@ class TestGridPlotter:
     def test_gridplotter_with_titles(self):
         """Test grid plotter with custom titles."""
         try:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         except ImportError:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         
         slices = [np.random.rand(50, 50) for _ in range(4)]
         titles = ['Slice A', 'Slice B', 'Slice C', 'Slice D']
@@ -716,9 +716,9 @@ class TestGridPlotter:
     def test_gridplotter_auto_grid_size(self):
         """Test automatic grid size calculation."""
         try:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         except ImportError:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         
         slices = [np.random.rand(50, 50) for _ in range(7)]
         
@@ -731,9 +731,9 @@ class TestGridPlotter:
     def test_gridplotter_with_overlays(self):
         """Test grid plotter with overlay slices."""
         try:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         except ImportError:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         
         slices = [np.random.rand(50, 50) for _ in range(3)]
         overlays = [np.random.rand(50, 50) for _ in range(3)]
@@ -747,9 +747,9 @@ class TestGridPlotter:
     def test_gridplotter_colormap_params(self):
         """Test grid plotter with custom colormap parameters."""
         try:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         except ImportError:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         
         slices = [np.random.rand(50, 50) for _ in range(4)]
         
@@ -770,9 +770,9 @@ class TestIntegrationNewFeatures:
     def test_extract_slices_then_plot_grid(self, scalar_imaginable_3d):
         """Test extracting slices and plotting in grid."""
         try:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         except ImportError:
-            from pyable_eros_montin.plotable import GridPlotter
+            from pyable.plotable import GridPlotter
         
         # Extract slices
         result = scalar_imaginable_3d.extractRepresentativeSlices(
@@ -804,9 +804,9 @@ class TestIntegrationNewFeatures:
             }
         
         try:
-            from pyable_eros_montin.utils import processImageDirectory
+            from pyable.utils import processImageDirectory
         except ImportError:
-            from pyable_eros_montin.utils import processImageDirectory
+            from pyable.utils import processImageDirectory
         
         df = processImageDirectory(
             str(tmp_path), processor,

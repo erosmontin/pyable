@@ -1,6 +1,6 @@
 # Archived: Isosurface Implementation
 
-This archived file mirrors the earlier top-level `ISOSURFACE_IMPLEMENTATION.md` and documents the VTK-based isosurface implementation used by `pyable_eros_montin.meshable` and `pyable_eros_montin.imaginable.renderIsosurface`.
+This archived file mirrors the earlier top-level `ISOSURFACE_IMPLEMENTATION.md` and documents the VTK-based isosurface implementation used by `pyable.meshable` and `pyable.imaginable.renderIsosurface`.
 
 Summary:
 

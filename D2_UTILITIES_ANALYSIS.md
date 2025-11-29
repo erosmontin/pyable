@@ -190,7 +190,7 @@ def classifyFromDICOMJSON(self, json_file)
 ```
 
 ### **Strategy 2: Moderate - Create New Utility Module**
-Create `pyable_eros_montin/batch.py`:
+Create `pyable/batch.py`:
 ```python
 class BatchProcessor:
     def processDirectory(self, directory, processor_func)
@@ -206,7 +206,7 @@ class InteractiveReviewer:
 ### **Strategy 3: Full - Add Web Interface**
 Create optional Streamlit app:
 ```
-pyable_eros_montin/apps/streamlit_viewer.py
+pyable/apps/streamlit_viewer.py
 ```
 
 ---

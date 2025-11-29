@@ -5,7 +5,7 @@
 # - Pixel types: integer pixel types (labels) are treated as discrete; transforms use nearest-neighbor to preserve labels. Continuous types (float) use interpolators (linear, bspline, etc.)
 
 Imaginable:
-  module: pyable_eros_montin.imaginable
+  module: pyable.imaginable
   description: |
     Core image wrapper around SimpleITK images with v3 numpy ordering.
     Provides coordinate transforms, resampling, orientation utilities, unified transform application, and VTK isosurface rendering.
@@ -55,7 +55,7 @@ Imaginable:
             - When show=False, returns actors for programmatic uses (batch rendering, saving to file).
 
 Meshable:
-  module: pyable_eros_montin.meshable
+  module: pyable.meshable
   description: conversion utilities between SimpleITK images and VTK data structures.
   functions:
     - name: sitk2vtk

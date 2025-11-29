@@ -7,7 +7,7 @@ import numpy as np
 import sys
 sys.path.insert(0, '/home/erosm/pyable')
 
-from pyable_eros_montin.imaginable import Imaginable
+from pyable.imaginable import Imaginable
 
 print("=" * 70)
 print("Testing Enhanced resampleOnCanonicalSpace()")

@@ -91,7 +91,7 @@ python -m pytest tests/test_phase3_integration_tests.py -v
 ## Files Modified
 
 ```
-pyable_eros_montin/
+pyable/
 ├── imaginable.py      (20 changes: +13, -7)
 ├── meshable.py        (50 changes: -50)
 └── utilizers.py       (2 changes: +1, -1)
@@ -162,7 +162,7 @@ if not img.isAxisAligned():
 ### Complete ML-Ready Pipeline
 
 ```python
-from pyable_eros_montin.imaginable import Imaginable
+from pyable.imaginable import Imaginable
 
 img = Imaginable(imagepath='scan.nii.gz')
 

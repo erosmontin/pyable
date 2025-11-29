@@ -1,7 +1,7 @@
 try:
     import imaginable as ima
 except:
-    import pyable_eros_montin.imaginable as ima
+    import pyable.imaginable as ima
 
 import numpy as np
 
