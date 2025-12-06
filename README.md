@@ -62,11 +62,12 @@ For details, see [BUGFIX_REPORT.md](BUGFIX_REPORT.md)
 
 ## Installation
 
-```
-python3 -m venv able
-source able/bin/activate
-pip install git+https://github.com/erosmontin/pyable.git
+To install pyable v3:
 
+```
+python3 -m venv "pyable v3"
+source "pyable v3"/bin/activate
+pip install git+https://github.com/erosmontin/pyable.git@v3-branch
 ```
 ## Cite Us
 
