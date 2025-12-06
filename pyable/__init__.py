@@ -47,7 +47,7 @@ from . import utils
 # Backward compatibility alias
 ROIable = Roiable
 
-__version__ = "3.1.0"
+__version__ = "3"
 __author__ = "Eros Montin"
 __all__ = [
     'Imaginable',
