@@ -16,7 +16,7 @@ import tempfile
 # Add parent directory to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from pyable.imaginable import Imaginable, SITKImaginable, ROIable, LabelMapable
+from pyable.imaginable import Imaginable, SITKImaginable, Roiable, LabelMapable
 from pyable.meshable import vtk2sitk, sitk2vtk
 
 try:
@@ -219,7 +219,7 @@ class TestImageOverlays:
     def test_mask_application(self):
         """Test applying mask to image"""
         base = SITKImaginable(image=self.base_img)
-        mask = ROIable(image=self.overlay_img)
+        mask = Roiable(image=self.overlay_img)
         
         # Apply mask
         masked = base.getDuplicate()

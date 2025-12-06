@@ -2,7 +2,7 @@
 from pyable import imaginable as ima
 
 A=ima.Imaginable('/data/MYDATA/HIPreconstructions/LeftRight111/input/Rightp10.nii.gz')
-A.writeImageAs('/home/eros/Desktop/Segm/Rightp10.mha')
+A.writeImageAs('/tmp/Rightp10.mha')
 # import SimpleITK as sitk
 
 # A=imaginable.SITKImaginable(filename='data/t.nii.gz')
