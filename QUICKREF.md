@@ -1,7 +1,7 @@
-# PYABLE Bug Fix Quick Reference
+# PYABLE Quick Reference
 
 ## Summary
-✅ **7 Critical Bugs Fixed** | ✅ **31+ Tests Created** | ✅ **100% Pass Rate**
+✅ **7 Critical Bugs Fixed** | ✅ **31+ Tests Created** | ✅ **20/20 Unit Tests Passing** | ✅ **v3 Release Ready**
 
 ---
 
@@ -21,17 +21,24 @@
 
 ## Running Tests
 
-### Phase 4 Regression (All validations):
+### Setup Virtual Environment:
 ```bash
-cd /home/erosm/pyable
-python tests/test_phase4_regression.py
+python3 -m venv "pyable v3"
+source "pyable v3"/bin/activate
+pip install pytest
 ```
-**Result:** 17/17 tests pass ✅
 
-### Phase 2 Unit Tests:
+### Phase 2 Unit Tests (20 tests):
 ```bash
 python -m pytest tests/test_phase2_unit_tests.py -v
 ```
+**Result:** 20/20 tests pass ✅
+
+### Phase 4 Regression (All validations):
+```bash
+python tests/test_phase4_regression.py
+```
+**Result:** 17/17 tests pass ✅
 
 ### Phase 3 Integration Tests:
 ```bash

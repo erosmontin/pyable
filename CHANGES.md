@@ -299,13 +299,31 @@ TOTAL SUCCESS RATE: 100.0% ✅
 
 ---
 
-## SIGN-OFF
+## RECENT UPDATES (December 6, 2025)
 
-- ✅ All bugs fixed
-- ✅ All tests passing
-- ✅ Backward compatibility verified
-- ✅ Documentation complete
-- ✅ Ready for merge to main
+### Dependency Updates
+- Added `pandas` to dependencies (required for utils.py)
+- Updated `pynico` dependency to use git install from tag v3
+- Updated package version to 3.0.0
 
-**Timestamp:** 2025-11-21 13:25:39  
+### Installation Improvements
+- Updated README.md with correct installation instructions for v3
+- Added venv creation with name "pyable v3"
+- Updated pip install to use @v3 tag
+
+### Test Fixes
+- Fixed import errors (ROIable → Roiable)
+- Corrected method calls (getDiceSimilarity → getDice, erodeImage → erodeRadius, etc.)
+- Fixed SimpleITK Paste calls in test setup
+- Updated assertions for pixel type strings
+- All 20 unit tests now passing
+
+### Branch Management
+- Renamed branch from v3 to v3-branch
+- Created and pushed tag v3
+- Updated remote references
+
+**Timestamp:** 2025-12-06  
 **Status:** ✅ COMPLETE
+
+---
