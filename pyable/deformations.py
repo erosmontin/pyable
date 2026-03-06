@@ -431,17 +431,24 @@ def get_bspline_grid_info(transform: sitk.BSplineTransform) -> dict:
     grid_info : dict
         Dictionary with keys: 'origin', 'spacing', 'direction', 'mesh_size'
     """
+    # GetTransformDomainPhysicalDimensions returns the total physical extent,
+    # not the per-voxel spacing. Compute per-voxel spacing from extent / mesh_size.
+    mesh_size = transform.GetTransformDomainMeshSize()
+    phys_dims = transform.GetTransformDomainPhysicalDimensions()
+    spacing = tuple(d / m for d, m in zip(phys_dims, mesh_size))
     return {
         "origin": transform.GetTransformDomainOrigin(),
-        "spacing": transform.GetTransformDomainPhysicalDimensions(),
+        "physical_dimensions": phys_dims,
+        "spacing": spacing,
         "direction": transform.GetTransformDomainDirection(),
-        "mesh_size": transform.GetTransformDomainMeshSize(),
+        "mesh_size": mesh_size,
     }
 
 
 def refine_bspline_grid(
     original_transform: sitk.BSplineTransform,
     new_mesh_size: Tuple[int, ...],
+    reference_image: Optional[sitk.Image] = None,
 ) -> sitk.BSplineTransform:
     """
     Refine B-spline transform by resampling coefficients to new mesh size.
@@ -454,6 +461,9 @@ def refine_bspline_grid(
         Original B-spline transform
     new_mesh_size : tuple
         New mesh size (e.g., (5, 5, 5))
+    reference_image : sitk.Image, optional
+        Reference image defining the domain. If None, one is constructed
+        from the transform domain parameters.
 
     Returns
     -------
@@ -463,9 +473,24 @@ def refine_bspline_grid(
     # Get original coefficients
     original_coefficients = original_transform.GetCoefficientImages()
 
+    # Build a reference image from the transform domain if not provided
+    if reference_image is None:
+        ndim = original_transform.GetDimension()
+        phys_dims = original_transform.GetTransformDomainPhysicalDimensions()
+        origin = original_transform.GetTransformDomainOrigin()
+        direction = original_transform.GetTransformDomainDirection()
+        mesh_size = original_transform.GetTransformDomainMeshSize()
+        # Estimate a reasonable image size from the physical dimensions
+        spacing = tuple(d / max(m, 1) for d, m in zip(phys_dims, mesh_size))
+        size = [int(round(d / s)) for d, s in zip(phys_dims, spacing)]
+        reference_image = sitk.Image(size, sitk.sitkFloat32)
+        reference_image.SetOrigin(origin)
+        reference_image.SetSpacing(spacing)
+        reference_image.SetDirection(direction)
+
     # Create new B-spline transform with desired mesh size
     new_transform = sitk.BSplineTransformInitializer(
-        sitk.Image(original_transform.GetTransformDomainPhysicalDimensions(), sitk.sitkFloat32),
+        reference_image,
         new_mesh_size,
     )
 
@@ -474,10 +499,8 @@ def refine_bspline_grid(
 
     # Resample coefficients to new grid
     resampler = sitk.ResampleImageFilter()
-    resampler.SetSize(new_mesh_size)
-    resampler.SetOutputSpacing(grid_info["spacing"])
-    resampler.SetOutputOrigin(grid_info["origin"])
-    resampler.SetOutputDirection(grid_info["direction"])
+    new_coeff_ref = new_transform.GetCoefficientImages()[0]
+    resampler.SetReferenceImage(new_coeff_ref)
 
     new_coefficients = [resampler.Execute(coef) for coef in original_coefficients]
 

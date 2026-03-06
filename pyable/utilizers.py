@@ -90,12 +90,16 @@ class RoiComparison():
         else:
             return None
 
-    def getSimilarity(self):
+    def getVolumeSimilarity(self):
+        """Get volume similarity from overlap filter."""
         ov=self.getOverlapFilter()
         if ov is not None:
             return ov.GetVolumeSimilarity()
         else:
             return None
+    
+    # Backward compatibility alias
+    getSimilarity = getVolumeSimilarity
     
     def getFalseNegativeError(self):
         ov=self.getOverlapFilter()
@@ -104,14 +108,17 @@ class RoiComparison():
         else:
             return None
     
-    def getFalsePostiveError(self):
+    def getFalsePositiveError(self):
         ov=self.getOverlapFilter()
         if ov is not None:
             return ov.GetFalsePositiveError()
         else:
             return None
+
+    # Backward compatibility alias
+    getFalsePostiveError = getFalsePositiveError
     
-    def getHahusdorf(self):
+    def getHausdorff(self):
         ov = sitk.HausdorffDistanceImageFilter()
         R=self.getReference()
         T=self.getTest()
@@ -124,12 +131,19 @@ class RoiComparison():
         else:
             return None
 
-    def getVolmeSimilarity(self):
+    # Backward compatibility alias
+    getHahusdorf = getHausdorff
+
+    def getVolumeSimilarityFromOverlap(self):
+        """Get volume similarity (same as getVolumeSimilarity, kept for clarity)."""
         ov=self.getOverlapFilter()
         if ov is not None:
             return ov.GetVolumeSimilarity()
         else:
             return None
+
+    # Backward compatibility alias
+    getVolmeSimilarity = getVolumeSimilarityFromOverlap
 
     def getMeanOverlap(self):
         ov=self.getOverlapFilter()
@@ -138,7 +152,8 @@ class RoiComparison():
         else:
             return None
 
-    def getSimilarity(self):
+    def getSimilarityIndex(self):
+        """Get similarity index using SimilarityIndexImageFilter."""
         ov = sitk.SimilarityIndexImageFilter()
         R=self.getReference()
         T=self.getTest()
@@ -166,14 +181,14 @@ class RoiComparison():
     
     def getAllMetrics(self):
         O={
-            "Hahusdorf":self.getHahusdorf(),
+            "Hausdorff":self.getHausdorff(),
             "FNE":self.getFalseNegativeError(),
-            "FPE":self.getFalsePostiveError(),
+            "FPE":self.getFalsePositiveError(),
             "Dice":self.getDice(),
             "Jaccard":self.getJaccard(),
-            "VolumeSimilarity":self.getVolmeSimilarity(),
+            "VolumeSimilarity":self.getVolumeSimilarity(),
             "MeanOverlap":self.getMeanOverlap(),
-            "Similarity":self.getSimilarity(),
+            "SimilarityIndex":self.getSimilarityIndex(),
             "OverlappedVoxels":self.getOverlappedVoxels(),
             "NonOverlappedVoxels":self.getNonOverlappedVoxels(),
         }

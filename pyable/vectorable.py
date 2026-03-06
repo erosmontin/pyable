@@ -206,18 +206,12 @@ class Vectorable(Imaginable):
         if len(factors) != self.getNumberOfComponents():
             raise ValueError(f"Expected {self.getNumberOfComponents()} factors, got {len(factors)}")
         
-        # Scale each component separately
-        scaled_image = self.getImage() * factors[0]
-        
-        # Use multiply filter for consistency
-        multiply_filter = sitk.MultiplyImageFilter()
-        result = self.getImage()
-        
-        for i, factor in enumerate(factors):
-            if factor != 1.0:
-                component = self.getComponent(i).getImage()
-                scaled_component = multiply_filter.Execute(component, sitk.Image(component.GetSize(), sitk.sitkFloat32, 1) + factor)
-                result = self.setComponent(i, scaled_component).getImage()
+        # Scale using numpy for correctness
+        arr = sitk.GetArrayFromImage(self.getImage())
+        for i, f in enumerate(factors):
+            arr[..., i] = arr[..., i] * f
+        result = sitk.GetImageFromArray(arr, isVector=True)
+        result.CopyInformation(self.getImage())
         
         return self.setImage(result, f"vectors scaled by {factors}")
     
@@ -242,19 +236,12 @@ class Vectorable(Imaginable):
         """
         magnitude_image = sitk.VectorMagnitudeImageFilter().Execute(self.getImage())
         
-        # Avoid division by zero
-        magnitude_array = sitk.GetArrayFromImage(magnitude_image)
-        magnitude_array[magnitude_array == 0] = 1
-        magnitude_image = sitk.GetImageFromArray(magnitude_array)
-        
-        # Cast to match vector image size
-        resampler = sitk.ResampleImageFilter()
-        resampler.SetReferenceImage(self.getImage())
-        magnitude_image = resampler.Execute(magnitude_image)
-        
-        # Simple approach: get numpy, normalize, set back
+        # Use numpy for the whole operation to avoid geometry issues
         vector_array = sitk.GetArrayFromImage(self.getImage())
         magnitude_array = sitk.GetArrayFromImage(magnitude_image)
+        
+        # Avoid division by zero
+        magnitude_array[magnitude_array == 0] = 1
         
         # Normalize
         with np.errstate(divide='ignore', invalid='ignore'):
@@ -348,6 +335,24 @@ class Vectorable(Imaginable):
         
         return np.mean(vector_array_flat, axis=0)
     
+    def describe(self):
+        """Print a concise summary of the vector field.
+
+        Returns:
+            dict: key vector field properties
+        """
+        info = super().describe() if hasattr(super(), 'describe') else {}
+        try:
+            info['num_components'] = self.getNumberOfComponents()
+            stats = self.getStatistics()
+            if stats:
+                for k, v in stats.items():
+                    info[f'magnitude_{k}'] = v
+        except Exception as e:
+            info['vector_error'] = str(e)
+        self._print_describe(info)
+        return info
+
     def getDuplicate(self) -> 'Vectorable':
         """Create a copy of this vector field."""
         return Vectorable(image=sitk.Image(self.getImage()))
@@ -569,8 +574,7 @@ class TimeSeriesable(Imaginable):
         extractor.SetIndex(index)
         
         frame_image = extractor.Execute(self.getImage())
-        # Reduce dimension to 3D
-        frame_image = sitk.Image(frame_image.GetSize()[:3], frame_image.GetPixelID())
+        # ExtractImageFilter already returns a proper 3D image with data and geometry
         
         result = Imaginable(image=frame_image)
         return result
@@ -814,6 +818,20 @@ class TimeSeriesable(Imaginable):
         """
         return self.getFrame(phase_number)
     
+    def describe(self):
+        """Print a concise summary of the time series.
+
+        Returns:
+            dict: key time series properties
+        """
+        info = super().describe() if hasattr(super(), 'describe') else {}
+        try:
+            info['num_frames'] = self.getNumberOfFrames()
+        except Exception as e:
+            info['timeseries_error'] = str(e)
+        self._print_describe(info)
+        return info
+
     def getDuplicate(self) -> 'TimeSeriesable':
         """Create a copy of this time series."""
         return TimeSeriesable(image=sitk.Image(self.getImage()))

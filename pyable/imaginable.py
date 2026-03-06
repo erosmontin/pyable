@@ -380,6 +380,9 @@ class Imaginable:
                 return filename
             except:
                 raise Exception(f" file {filename} can't be written!!")
+
+    # Convenience alias
+    write = writeImageAs
     
     def printImageInfo(self):
         image= self.getImage()
@@ -525,8 +528,9 @@ class Imaginable:
     
     def cropToBoundingBox(self):
         BL,BU=self.getBoundingBox()
-        BL=[int(a) for a in BL]
-        BU=[int(a) for a in BU]
+        # getBoundingBox returns (z,y,x) numpy order, cropImage expects ITK (x,y,z)
+        BL=[int(a) for a in reversed(BL)]
+        BU=[int(a) for a in reversed(BU)]
         return self.cropImage(BL,BU)
     
     def resampleOnCanonicalSpace(self, interpolator=None, useNearestNeighborExtrapolator=None, bgvalue=0.0):
@@ -1010,14 +1014,16 @@ class Imaginable:
         # image=self.getImage()
         return np.prod(self.getImageSpacing())
 
-    def getNumberofVoxels(self):
-        """get the number of a voxel in the imaginable
+    def getNumberOfVoxels(self):
+        """get the number of voxels in the imaginable
 
         Returns:
-            float: N voxels
+            int: N voxels
         """        
-        # image=self.getImage()
         return np.prod(self.getImageSize())
+
+    # Backward compatibility alias
+    getNumberofVoxels = getNumberOfVoxels
 
     def getVolume(self):
         """get the volume of the imaginable
@@ -1025,8 +1031,7 @@ class Imaginable:
         Returns:
             float: volume
         """        
-        # image=self.getImage()
-        return np.prod(self.getVoxelVolume()*self.getNumberofVoxels())
+        return self.getVoxelVolume() * self.getNumberOfVoxels()
 
     def __tellme__(self,m,t=None):
         if t:
@@ -1040,6 +1045,38 @@ class Imaginable:
             print(m)
     def whathappened(self):
         self.log.getWhatHappened()
+
+    def _print_describe(self, info):
+        """Pretty-print a describe() dictionary."""
+        max_key = max(len(k) for k in info) if info else 0
+        for k, v in info.items():
+            print(f"  {k:<{max_key}} : {v}")
+
+    def describe(self):
+        """Print a concise summary of the image.
+
+        Returns:
+            dict: key image properties
+        """
+        info = {}
+        try:
+            info['class'] = type(self).__name__
+            img = self.getImage()
+            if img is not None:
+                info['size (x,y,z)'] = list(img.GetSize())
+                info['spacing'] = [round(s, 4) for s in img.GetSpacing()]
+                info['origin'] = [round(o, 4) for o in img.GetOrigin()]
+                info['dimension'] = img.GetDimension()
+                info['pixel_type'] = img.GetPixelIDTypeAsString()
+                info['num_voxels'] = int(self.getNumberOfVoxels())
+                info['voxel_volume'] = round(float(self.getVoxelVolume()), 6)
+                info['total_volume'] = round(float(self.getVolume()), 4)
+            else:
+                info['image'] = 'Not set'
+        except Exception as e:
+            info['error'] = str(e)
+        self._print_describe(info)
+        return info
     def __del__(self):
         self.__tellme__("I'm being automatically destroyed. Goodbye!",'destroy xxx999')
 
@@ -1243,16 +1280,13 @@ class Imaginable:
         U=self.getImageSize()
         if coordinates:
             PP="coordinates"
-            lowerB=[self.getIndexFromCoordinates(h) for h in lowerB]
-            upperBtmp=[self.getIndexFromCoordinates(h) for h in upperB]
+            lowerB=list(self.getIndexFromCoordinates(lowerB))
+            upperB=list(self.getIndexFromCoordinates(upperB))
         
 
         for t in range(len(upperB)):
             if (((upperB[t]==0) and (isinstance(upperB[t],int))) or (np.isnan(upperB[t]) if isinstance(upperB[t], (int, float)) else False)):
                 upperB[t]=U[t]
-            else:
-                if coordinates:
-                    upperB[t]=upperBtmp[t]
 
        
         S=[u-l for l,u in zip(lowerB,upperB)]
@@ -2641,6 +2675,23 @@ class Roiable(Imaginable):
         
         return self.setImage(warped, f"applied displacement field to ROI from {displacement_field if isinstance(displacement_field, str) else 'field object'}")
 
+    def describe(self):
+        """Print a concise summary of the ROI.
+
+        Returns:
+            dict: key ROI properties
+        """
+        info = super().describe() if hasattr(super(), 'describe') else {}
+        try:
+            info['roi_value'] = getattr(self, 'roiValue', None)
+            arr = self.getImageAsNumpy()
+            if arr is not None:
+                info['unique_values'] = sorted(int(v) for v in np.unique(arr))
+                info['non_zero_voxels'] = int(np.count_nonzero(arr))
+        except Exception as e:
+            info['roi_error'] = str(e)
+        self._print_describe(info)
+        return info
 
 
 
@@ -2720,6 +2771,25 @@ class LabelMapable(Imaginable):
     def getCentroidIndex(self):
         Centroid = self.getIndexFromCoordinates(self.getCentroidCoordinates())
         return Centroid
+
+    def describe(self):
+        """Print a concise summary of the label map.
+
+        Returns:
+            dict: key label map properties
+        """
+        info = super().describe() if hasattr(super(), 'describe') else {}
+        try:
+            arr = self.getImageAsNumpy()
+            if arr is not None:
+                labels = sorted(int(v) for v in np.unique(arr))
+                info['labels'] = labels
+                info['num_labels'] = len(labels)
+                info['non_zero_voxels'] = int(np.count_nonzero(arr))
+        except Exception as e:
+            info['labelmap_error'] = str(e)
+        self._print_describe(info)
+        return info
 
     # ========================================================================
     # MULTI-LABEL DEFORMATION METHODS
@@ -2802,7 +2872,6 @@ class LabelMapableROI(LabelMapable):
     def mergeLabels(self):
         LABELMAP = None
         for rd,v in zip(self.ROIS,self.labelsvalues):
-            print(v)
             O=rd.getImageAsNumpy()
             try:
                 if LABELMAP is None:
@@ -2885,6 +2954,22 @@ class Fieldable(Imaginable):
             L.reverse()
             o = np.transpose(nparray, L)
         return self.setImageFromNumpy(o, refimage, spacing, origin, direction)
+
+    def describe(self):
+        """Print a concise summary of the vector field.
+
+        Returns:
+            dict: key field properties
+        """
+        info = super().describe() if hasattr(super(), 'describe') else {}
+        try:
+            img = self.getImage()
+            if img is not None:
+                info['num_components'] = img.GetNumberOfComponentsPerPixel()
+        except Exception as e:
+            info['field_error'] = str(e)
+        self._print_describe(info)
+        return info
 
 
 #     def toVtk(self):
