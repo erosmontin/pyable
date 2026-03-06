@@ -43,6 +43,8 @@ from .meshable import vtk2sitk, sitk2vtk
 from .utils import processImageDirectory
 from . import deformations
 from . import utils
+from . import segmentation
+from . import metrics
 
 # Backward compatibility alias
 ROIable = Roiable
@@ -73,4 +75,6 @@ __all__ = [
     'sitk2vtk',
     'deformations',
     'utils',
+    'segmentation',
+    'metrics',
 ]

@@ -1682,6 +1682,64 @@ class Imaginable:
         
         return self.setImage(inverted, "displacement field inverted")
 
+    def convertTransformToField(self, transform):
+        """
+        Convert any registration transform to a displacement field on this image's grid.
+
+        Converts rigid, affine, B-spline, or composite transforms into a dense
+        displacement field matching the geometry of this image.
+
+        Parameters
+        ----------
+        transform : str or sitk.Transform
+            Path to transform file (.tfm, .h5, .txt) or SimpleITK Transform object.
+
+        Returns
+        -------
+        Fieldable
+            Vector image (displacement field) on this image's grid.
+
+        Example
+        -------
+        >>> img = SITKImaginable('image.nii.gz')
+        >>> df = img.convertTransformToField('registration.tfm')
+        >>> df.write('displacement_field.mha')
+        """
+        from . import deformations
+        image = self.getImage()
+        field = deformations.transform_to_displacement_field(
+            transform,
+            output_size=image.GetSize(),
+            output_origin=image.GetOrigin(),
+            output_spacing=image.GetSpacing(),
+            output_direction=image.GetDirection(),
+        )
+        return Fieldable(image=field)
+
+    def composeTransforms(self, transforms, inverse_flags=None):
+        """
+        Create a composite transform from multiple transforms and apply it.
+
+        Parameters
+        ----------
+        transforms : list of str or sitk.Transform
+            Transforms to chain (applied in order).
+        inverse_flags : list of bool, optional
+            If provided, each True entry inverts the corresponding transform.
+
+        Returns
+        -------
+        self
+            For method chaining.
+
+        Example
+        -------
+        >>> img.composeTransforms(['rigid.tfm', 'bspline.tfm'])
+        """
+        from . import deformations
+        composite = deformations.create_composite_transform(transforms, inverse_flags)
+        return self.applyTransform(composite)
+
     def changePixelType(self,dtype):
         return self.setImage(sitk.Cast(self.getImage(),dtype),f'casted to {dtype}')
     def cast(self,dtype):
@@ -2675,6 +2733,727 @@ class Roiable(Imaginable):
         
         return self.setImage(warped, f"applied displacement field to ROI from {displacement_field if isinstance(displacement_field, str) else 'field object'}")
 
+    # ========================================================================
+    # SEGMENTATION REFINEMENT METHODS
+    # ========================================================================
+
+    def refineWatershed(self, image, height_map=None, erosion_iters=3,
+                        dilation_iters=5, min_voxels=50):
+        """
+        Refine ROI boundaries using marker-based watershed segmentation.
+
+        Markers are created from an eroded interior (foreground) and a
+        dilated exterior (background).
+
+        Parameters
+        ----------
+        image : Imaginable or sitk.Image
+            Reference intensity image (e.g. MRI scan).
+        height_map : Imaginable or sitk.Image, optional
+            Custom height / cost map.  If *None*, the gradient magnitude
+            of *image* is used.
+        erosion_iters : int
+            Erosion iterations for foreground markers (default 3).
+        dilation_iters : int
+            Dilation iterations for background markers (default 5).
+        min_voxels : int
+            Remove components smaller than this (default 50).
+
+        Returns
+        -------
+        self
+            For method chaining.
+
+        Example
+        -------
+        >>> roi = Roiable('mask.nii.gz')
+        >>> roi.refineWatershed(Imaginable('scan.nii.gz'))
+        """
+        from . import segmentation as seg
+        img = seg._to_sitk(image)
+        hm = seg._to_sitk(height_map) if height_map is not None else None
+        result = seg.watershed_refine(
+            self.getImage(), img, height_map=hm,
+            erosion_iters=erosion_iters, dilation_iters=dilation_iters,
+            min_voxels=min_voxels,
+        )
+        return self.setImage(result, 'refined via watershed')
+
+    def refineRegionGrowing(self, image, multiplier=2.5, neighborhood_radius=1,
+                            n_iterations=3, max_distance_mm=10.0, n_seeds=100,
+                            prob_map=None, prob_threshold=0.1, min_voxels=50):
+        """
+        Refine ROI via confidence-connected region growing.
+
+        Seeds are sampled from the eroded ROI interior and the region
+        grows into intensity-similar voxels.
+
+        Parameters
+        ----------
+        image : Imaginable or sitk.Image
+            Reference intensity image.
+        multiplier : float
+            Standard-deviation multiplier for intensity acceptance range.
+        neighborhood_radius : int
+            Radius for local statistics.
+        n_iterations : int
+            Region-growing iterations.
+        max_distance_mm : float
+            Maximum growth distance from original ROI surface (mm).
+        n_seeds : int
+            Maximum number of seed points.
+        prob_map : Imaginable or sitk.Image, optional
+            Probability map — grown region is intersected with values
+            above *prob_threshold*.
+        prob_threshold : float
+            Threshold on *prob_map*.
+        min_voxels : int
+            Remove components smaller than this.
+
+        Returns
+        -------
+        self
+
+        Example
+        -------
+        >>> roi.refineRegionGrowing(scan, multiplier=2.0, max_distance_mm=5.0)
+        """
+        from . import segmentation as seg
+        img = seg._to_sitk(image)
+        pm = seg._to_sitk(prob_map) if prob_map is not None else None
+        result = seg.region_growing_refine(
+            self.getImage(), img, multiplier=multiplier,
+            neighborhood_radius=neighborhood_radius, n_iterations=n_iterations,
+            max_distance_mm=max_distance_mm, n_seeds=n_seeds,
+            prob_map=pm, prob_threshold=prob_threshold, min_voxels=min_voxels,
+        )
+        return self.setImage(result, 'refined via region growing')
+
+    def refineGeodesicActiveContour(self, image, propagation=0.5, curvature=0.3,
+                                    advection=1.0, iterations=50,
+                                    rms_tolerance=0.001, allow_shrink=False,
+                                    speed_image=None):
+        """
+        Refine ROI boundaries using a geodesic active contour level-set.
+
+        Parameters
+        ----------
+        image : Imaginable or sitk.Image
+            Reference intensity image for edge computation.
+        propagation : float
+            Balloon force (positive → expand, negative → shrink).
+        curvature : float
+            Smoothing force (higher = smoother boundaries).
+        advection : float
+            Edge-attraction force.
+        iterations : int
+            Maximum GAC iterations.
+        rms_tolerance : float
+            Convergence threshold.
+        allow_shrink : bool
+            If *False*, the result is the union with the seed
+            (expansion-only).
+        speed_image : Imaginable or sitk.Image, optional
+            Pre-computed speed / feature image.
+
+        Returns
+        -------
+        self
+
+        Example
+        -------
+        >>> roi.refineGeodesicActiveContour(scan, propagation=0.3, curvature=0.8)
+        """
+        from . import segmentation as seg
+        img = seg._to_sitk(image)
+        si = seg._to_sitk(speed_image) if speed_image is not None else None
+        result = seg.geodesic_active_contour_refine(
+            self.getImage(), img, propagation=propagation,
+            curvature=curvature, advection=advection, iterations=iterations,
+            rms_tolerance=rms_tolerance, allow_shrink=allow_shrink,
+            speed_image=si,
+        )
+        return self.setImage(result, 'refined via geodesic active contour')
+
+    def expandByProbability(self, prob_map, threshold=0.25, max_layers=5,
+                            max_distance_mm=None, fill_holes=True,
+                            min_voxels=50):
+        """
+        Expand ROI layer-by-layer, accepting only voxels above a
+        probability threshold.
+
+        Parameters
+        ----------
+        prob_map : Imaginable or sitk.Image
+            Probability / confidence map (float [0, 1]).
+        threshold : float
+            Minimum probability for a voxel to be included.
+        max_layers : int
+            Maximum expansion layers.
+        max_distance_mm : float, optional
+            Hard distance cap from original ROI surface.
+        fill_holes : bool
+            Fill holes after expansion.
+        min_voxels : int
+            Remove components smaller than this.
+
+        Returns
+        -------
+        self
+
+        Example
+        -------
+        >>> roi.expandByProbability(tissue_prob, threshold=0.3, max_layers=3)
+        """
+        from . import segmentation as seg
+        pm = seg._to_sitk(prob_map)
+        result = seg.probability_expansion(
+            self.getImage(), pm, threshold=threshold, max_layers=max_layers,
+            max_distance_mm=max_distance_mm, fill_holes=fill_holes,
+            min_voxels=min_voxels,
+        )
+        return self.setImage(result, 'expanded by probability')
+
+    def shrinkByProbability(self, prob_map, threshold=0.15, max_layers=5,
+                            min_preserve_fraction=0.5, fill_holes=True):
+        """
+        Shrink ROI by removing low-probability boundary voxels.
+
+        Parameters
+        ----------
+        prob_map : Imaginable or sitk.Image
+            Probability / confidence map (float [0, 1]).
+        threshold : float
+            Boundary voxels below this probability are removed.
+        max_layers : int
+            Maximum shrinkage layers.
+        min_preserve_fraction : float
+            Stop if volume falls below this fraction of the original.
+        fill_holes : bool
+            Fill holes after shrinkage.
+
+        Returns
+        -------
+        self
+
+        Example
+        -------
+        >>> roi.shrinkByProbability(tissue_prob, threshold=0.2, max_layers=3)
+        """
+        from . import segmentation as seg
+        pm = seg._to_sitk(prob_map)
+        result = seg.probability_shrinkage(
+            self.getImage(), pm, threshold=threshold, max_layers=max_layers,
+            min_preserve_fraction=min_preserve_fraction, fill_holes=fill_holes,
+        )
+        return self.setImage(result, 'shrunk by probability')
+
+    def fillBinaryHoles(self):
+        """
+        Fill all enclosed holes inside the ROI.
+
+        Unlike ``removeHoles`` (which targets small holes), this fills
+        *every* internal cavity regardless of size.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        result = seg.fill_binary_holes(self.getImage())
+        return self.setImage(result, 'binary holes filled')
+
+    def getDistanceMap(self):
+        """
+        Compute the Euclidean distance transform from the ROI surface.
+
+        Returns
+        -------
+        Imaginable
+            Float image where each voxel contains the distance (mm) to the
+            nearest ROI surface voxel.  Zero inside the ROI.
+        """
+        from . import segmentation as seg
+        dist = seg.compute_distance_map(self.getImage())
+        result = Imaginable(image=dist)
+        return result
+
+    def getShell(self, width_mm=5.0):
+        """
+        Compute a shell (annular band) around the ROI surface.
+
+        Parameters
+        ----------
+        width_mm : float
+            Shell width in mm (extends outward from ROI surface).
+
+        Returns
+        -------
+        Roiable
+            Binary mask of the shell region.
+        """
+        from . import segmentation as seg
+        shell = seg.compute_shell(self.getImage(), width_mm=width_mm)
+        return Roiable(image=shell)
+
+    @staticmethod
+    def fuseSTAPLE(segmentations, confidence_threshold=0.5, min_voxels=50):
+        """
+        Fuse multiple binary segmentations using the STAPLE algorithm.
+
+        Parameters
+        ----------
+        segmentations : list of Roiable or sitk.Image
+            Binary segmentations to fuse.
+        confidence_threshold : float
+            Threshold on STAPLE probability for the final output.
+        min_voxels : int
+            Remove components smaller than this.
+
+        Returns
+        -------
+        Roiable
+            Fused binary ROI.
+
+        Example
+        -------
+        >>> fused = Roiable.fuseSTAPLE([roi1, roi2, roi3])
+        """
+        from . import segmentation as seg
+        result = seg.staple_fusion(
+            segmentations, confidence_threshold=confidence_threshold,
+            min_voxels=min_voxels,
+        )
+        return Roiable(image=result)
+
+    # ========================================================================
+    # COMPARISON & SURFACE METRICS
+    # ========================================================================
+
+    def compareTo(self, other):
+        """
+        Full comparison against another ROI: overlap + surface distance metrics.
+
+        Parameters
+        ----------
+        other : Roiable or sitk.Image
+            Reference ROI to compare against.
+
+        Returns
+        -------
+        dict
+            Dice, Jaccard, VolumeSimilarity, FalseDiscoveryRate,
+            FalseNegativeError, FalsePositiveError, MeanSurfaceDist_mm,
+            RMSDist_mm, HD95_mm, SurfaceDice_1mm.
+
+        Example
+        -------
+        >>> metrics = predicted_roi.compareTo(ground_truth_roi)
+        >>> print(f"Dice = {metrics['Dice']:.3f}")
+        """
+        from . import metrics as met
+        ref = getmeTheSimpleITKImage(other)
+        return met.compare_segmentations(self.getImage(), ref)
+
+    def getSurfaceDistances(self, other):
+        """
+        Symmetric surface distance metrics against another ROI.
+
+        Parameters
+        ----------
+        other : Roiable or sitk.Image
+            Reference ROI.
+
+        Returns
+        -------
+        dict
+            MeanSurfaceDist_mm, RMSDist_mm, HD95_mm, SurfaceDice_1mm.
+        """
+        from . import metrics as met
+        ref = getmeTheSimpleITKImage(other)
+        return met.compute_surface_distances(self.getImage(), ref)
+
+    def exportSurfaceWithError(self, other, out_dir='/tmp/surface_error',
+                               highlight_percentile=95):
+        """
+        Export this ROI and a reference as PLY/VTP meshes with per-vertex error.
+
+        Requires ``pyvista`` and ``scikit-image``.
+
+        Parameters
+        ----------
+        other : Roiable or sitk.Image
+            Reference (ground-truth) ROI.
+        out_dir : str
+            Output directory for mesh files.
+        highlight_percentile : int
+            Percentile threshold for the high-error sub-mesh.
+
+        Example
+        -------
+        >>> pred.exportSurfaceWithError(gt, out_dir='/g/paraview')
+        """
+        from . import metrics as met
+        ref_img = getmeTheSimpleITKImage(other)
+        met.export_surface_with_error(
+            reference_arr=ref_img,
+            test_arr=self.getImage(),
+            spacing=self.getImageSpacing(),
+            out_dir=out_dir,
+            highlight_percentile=highlight_percentile,
+        )
+
+    # ========================================================================
+    # QUALITY SCORES (no ground truth needed)
+    # ========================================================================
+
+    def getEdgeAlignmentScore(self, image, band_width=2, sigma_mm=1.0):
+        """
+        How well the ROI boundary aligns with image edges.
+
+        Higher score means better alignment with actual anatomical boundaries.
+
+        Parameters
+        ----------
+        image : Imaginable or sitk.Image
+            Grayscale image (e.g. MRI).
+        band_width : int
+            Surface band width in voxels.
+        sigma_mm : float
+            Gaussian sigma for gradient computation.
+
+        Returns
+        -------
+        float
+            Edge alignment score in [0, 1].
+        """
+        from . import metrics as met
+        img = getmeTheSimpleITKImage(image)
+        return met.compute_edge_alignment_score(
+            self.getImage(), img, band_width=band_width, sigma_mm=sigma_mm)
+
+    def getCompactnessScore(self):
+        """
+        Volume / surface-area ratio.  Higher = more compact / smoother.
+
+        Returns
+        -------
+        float
+        """
+        from . import metrics as met
+        return met.compute_compactness_score(self.getImage())
+
+    def getConnectedComponentCount(self):
+        """
+        Number of connected components.  Ideally 1.
+
+        Returns
+        -------
+        int
+        """
+        from . import metrics as met
+        return met.compute_connectivity_score(self.getImage())
+
+    # ========================================================================
+    # MORPHOMETRIC ANALYSIS
+    # ========================================================================
+
+    def getMorphometrics(self):
+        """
+        Comprehensive morphometric analysis of the ROI.
+
+        Returns a dict containing PCA-based extents (length, width, thickness),
+        max Feret diameter, max inscribed-sphere thickness, and local
+        thickness statistics.
+
+        Returns
+        -------
+        dict
+            Keys: principal (length/width/thickness), max_feret_mm,
+            max_inscribed_thickness_mm, thickness_stats (mean/median/std/max/p25/p75).
+
+        Example
+        -------
+        >>> roi = Roiable('cartilage.nii.gz')
+        >>> m = roi.getMorphometrics()
+        >>> print(f"Length={m['principal']['length']:.1f} mm")
+        """
+        from . import metrics as met
+        mask = self.getImageAsNumpy() > 0
+        spacing = self.getImageSpacing()  # (x, y, z)
+        # metrics expect ZYX spacing
+        sp_zyx = tuple(reversed(spacing))
+
+        principal = met.roi_principal_extents(mask, sp_zyx)
+        result = {
+            'principal': {
+                'length': principal['length'],
+                'width': principal['width'],
+                'thickness': principal['thickness'],
+            },
+            'max_feret_mm': met.roi_max_feret(mask, sp_zyx),
+            'max_inscribed_thickness_mm': met.roi_max_thickness_inscribed(mask, sp_zyx),
+            'thickness_stats': met.roi_mean_thickness(mask, sp_zyx),
+        }
+        return result
+
+    def getPrincipalExtents(self):
+        """
+        PCA-based oriented bounding-box extents (length, width, thickness).
+
+        Returns
+        -------
+        dict with length, width, thickness (all in mm).
+        """
+        from . import metrics as met
+        mask = self.getImageAsNumpy() > 0
+        sp_zyx = tuple(reversed(self.getImageSpacing()))
+        return met.roi_principal_extents(mask, sp_zyx)
+
+    def getMaxFeret(self):
+        """
+        Maximum Feret diameter in mm (largest pairwise distance on
+        the convex hull).
+
+        Returns
+        -------
+        float
+        """
+        from . import metrics as met
+        mask = self.getImageAsNumpy() > 0
+        sp_zyx = tuple(reversed(self.getImageSpacing()))
+        return met.roi_max_feret(mask, sp_zyx)
+
+    def getMaxInscribedThickness(self):
+        """
+        Maximum inscribed-sphere thickness: ``2 * max(EDT)`` in mm.
+
+        Returns
+        -------
+        float
+        """
+        from . import metrics as met
+        mask = self.getImageAsNumpy() > 0
+        sp_zyx = tuple(reversed(self.getImageSpacing()))
+        return met.roi_max_thickness_inscribed(mask, sp_zyx)
+
+    def getThicknessStats(self):
+        """
+        Local thickness statistics via EDT.
+
+        Returns
+        -------
+        dict with mean, median, std, max, p25, p75 (all in mm).
+        """
+        from . import metrics as met
+        mask = self.getImageAsNumpy() > 0
+        sp_zyx = tuple(reversed(self.getImageSpacing()))
+        return met.roi_mean_thickness(mask, sp_zyx)
+
+    # ========================================================================
+    # BINARY SMOOTHING
+    # ========================================================================
+
+    def smoothBinary(self, radius=1, mode='closing'):
+        """
+        Morphological smoothing of the binary ROI.
+
+        Parameters
+        ----------
+        radius : int
+            Kernel radius in voxels.
+        mode : str
+            ``'closing'`` (fill small gaps), ``'opening'`` (remove small bumps),
+            or ``'both'`` (closing then opening).
+
+        Returns
+        -------
+        self
+        """
+        img = self.getImage()
+        if mode in ('closing', 'both'):
+            img = sitk.BinaryMorphologicalClosing(img > 0, [radius] * img.GetDimension())
+        if mode in ('opening', 'both'):
+            img = sitk.BinaryMorphologicalOpening(img > 0, [radius] * img.GetDimension())
+        return self.setImage(sitk.Cast(img, sitk.sitkUInt8), f'smoothBinary mode={mode} r={radius}')
+
+    # ========================================================================
+    # DISTANCE MAP & SURFACE METHODS
+    # ========================================================================
+
+    def getSurfaceMask(self):
+        """
+        Extract 1-voxel-thick surface contour of the ROI.
+
+        Returns
+        -------
+        Roiable
+            Binary surface mask.
+
+        Example
+        -------
+        >>> surface = roi.getSurfaceMask()
+        >>> surface.write('surface.nii.gz')
+        """
+        from . import metrics as met
+        surf = met.surface_mask(self.getImage())
+        return Roiable(image=surf)
+
+    def getSignedDistanceMap(self):
+        """
+        Signed Maurer distance map from this ROI.
+
+        Negative inside, positive outside, in mm (physical spacing).
+
+        Returns
+        -------
+        Imaginable
+            Float32 signed distance map.
+
+        Example
+        -------
+        >>> sdm = roi.getSignedDistanceMap()
+        >>> sdm.write('signed_dist.nii.gz')
+        """
+        from . import metrics as met
+        sdm = met.signed_distance_map(self.getImage())
+        return Imaginable(image=sdm)
+
+    def getSurfaceDistanceMap(self, other):
+        """
+        Image where voxels on THIS surface contain distance (mm) to OTHER mask.
+
+        All non-surface voxels are 0.
+
+        Parameters
+        ----------
+        other : Roiable or sitk.Image
+            Target mask to measure distance to.
+
+        Returns
+        -------
+        Imaginable
+            Float32 distance map (non-zero only on this ROI's surface).
+
+        Example
+        -------
+        >>> dist_img = pre_roi.getSurfaceDistanceMap(post_roi)
+        >>> dist_img.write('surface_dist.nii.gz')
+        """
+        from . import metrics as met
+        other_img = getmeTheSimpleITKImage(other)
+        dm = met.surface_distance_map_image(self.getImage(), other_img)
+        return Imaginable(image=dm)
+
+    def getChangeMaps(self, other):
+        """
+        Boolean change maps between this ROI (pre) and another (post).
+
+        Parameters
+        ----------
+        other : Roiable or sitk.Image
+            Post-registration mask (should be on the same grid).
+
+        Returns
+        -------
+        dict
+            ``{'removed': Roiable, 'added': Roiable, 'changed': Roiable}``
+
+        Example
+        -------
+        >>> changes = pre_roi.getChangeMaps(post_roi_registered)
+        >>> changes['removed'].write('removed.nii.gz')
+        """
+        from . import metrics as met
+        other_img = getmeTheSimpleITKImage(other)
+        maps = met.compute_change_maps(self.getImage(), other_img)
+        return {k: Roiable(image=v) for k, v in maps.items()}
+
+    def splitByConnectedComponents(self, sort_by='size'):
+        """
+        Split this ROI into its connected components.
+
+        Parameters
+        ----------
+        sort_by : str
+            ``'size'`` (descending voxel count) or ``'none'``.
+
+        Returns
+        -------
+        list[Roiable]
+            One Roiable per connected component.
+
+        Example
+        -------
+        >>> parts = roi.splitByConnectedComponents()
+        >>> largest = parts[0]
+        """
+        from . import metrics as met
+        masks = met.split_connected_components(self.getImage(), sort_by=sort_by)
+        return [Roiable(image=m) for m in masks]
+
+    def splitLeftRight(self, axis=0):
+        """
+        Split into left and right parts using connected-component centroids.
+
+        The two largest components are identified.  "Left" is the one with the
+        smaller centroid coordinate along *axis* (default: X = left-right in LPS).
+
+        Parameters
+        ----------
+        axis : int
+            Physical axis index (0=X, 1=Y, 2=Z).
+
+        Returns
+        -------
+        (left, right) : tuple[Roiable, Roiable]
+
+        Example
+        -------
+        >>> left, right = femur_roi.splitLeftRight()
+        """
+        from . import metrics as met
+        left, right = met.split_left_right(self.getImage(), axis=axis)
+        return Roiable(image=left), Roiable(image=right)
+
+    def exportSurfaceVTP(self, out_path, distance_to=None, scalar_name='dist_mm'):
+        """
+        Export marching-cubes surface mesh as VTP, optionally coloured by
+        distance to another mask.
+
+        Requires VTK (``pip install vtk``).
+
+        Parameters
+        ----------
+        out_path : str
+            Output ``.vtp`` file path.
+        distance_to : Roiable or sitk.Image, optional
+            If provided, each surface vertex is coloured by distance (mm)
+            to this mask.
+        scalar_name : str
+            Name of the scalar array in the VTP file.
+
+        Example
+        -------
+        >>> roi.exportSurfaceVTP('surface.vtp')
+        >>> roi.exportSurfaceVTP('error.vtp', distance_to=other_roi)
+        """
+        from . import metrics as met
+        dist_img = None
+        if distance_to is not None:
+            other_img = getmeTheSimpleITKImage(distance_to)
+            dist_img = sitk.Abs(sitk.SignedMaurerDistanceMap(
+                sitk.Cast(other_img > 0, sitk.sitkUInt8),
+                insideIsPositive=False,
+                squaredDistance=False,
+                useImageSpacing=True,
+            ))
+        met.export_surface_vtp(
+            self.getImage(), out_path,
+            distance_image=dist_img,
+            scalar_name=scalar_name,
+        )
+
     def describe(self):
         """Print a concise summary of the ROI.
 
@@ -2792,6 +3571,324 @@ class LabelMapable(Imaginable):
         return info
 
     # ========================================================================
+    # PER-LABEL EXTRACTION AND MANIPULATION
+    # ========================================================================
+
+    def getLabels(self, exclude_background=True):
+        """
+        Return the list of unique label values in the label map.
+
+        Parameters
+        ----------
+        exclude_background : bool
+            If *True*, label 0 is excluded.
+
+        Returns
+        -------
+        list of int
+        """
+        arr = self.getImageAsNumpy()
+        labels = sorted(int(v) for v in np.unique(arr))
+        if exclude_background and 0 in labels:
+            labels.remove(0)
+        return labels
+
+    def extractLabel(self, label_value):
+        """
+        Extract a single label as a binary Roiable.
+
+        Parameters
+        ----------
+        label_value : int
+            The label value to extract.
+
+        Returns
+        -------
+        Roiable
+            Binary mask where the label equals *label_value*.
+
+        Example
+        -------
+        >>> bone = labelmap.extractLabel(1)
+        >>> bone.describe()
+        """
+        arr = (self.getImageAsNumpy() == label_value).astype(np.uint8)
+        roi = Roiable()
+        roi.setImageFromNumpy(arr, refimage=self.getImage())
+        return roi
+
+    def setLabel(self, label_value, roi):
+        """
+        Set / overwrite a single label from a binary Roiable.
+
+        Existing voxels with *label_value* are first cleared, then the
+        non-zero voxels of *roi* are written with *label_value*.
+
+        Parameters
+        ----------
+        label_value : int
+            Label value to write.
+        roi : Roiable or sitk.Image
+            Binary mask indicating where *label_value* should be placed.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        roi_sitk = seg._to_sitk(roi)
+        roi_sitk = seg._ensure_same_grid(roi_sitk, self.getImage(),
+                                          sitk.sitkNearestNeighbor)
+        arr = self.getImageAsNumpy().copy()
+        roi_arr = sitk.GetArrayFromImage(roi_sitk) > 0
+        # Clear existing label
+        arr[arr == label_value] = 0
+        # Write new label
+        arr[roi_arr] = label_value
+        self.setImageFromNumpy(arr, refimage=self.getImage())
+        return self
+
+    # ========================================================================
+    # COMPARISON METHODS
+    # ========================================================================
+
+    def compareToByLabel(self, other, labels=None):
+        """
+        Per-label comparison against another label map.
+
+        Returns overlap and surface distance metrics for each shared label.
+
+        Parameters
+        ----------
+        other : LabelMapable or sitk.Image
+            Reference label map.
+        labels : list of int, optional
+            Labels to compare.  If *None*, uses all non-zero labels from
+            both label maps.
+
+        Returns
+        -------
+        dict[int, dict]
+            Mapping ``label_value → metrics_dict``.
+
+        Example
+        -------
+        >>> results = pred_lm.compareToByLabel(gt_lm)
+        >>> for label, m in results.items():
+        ...     print(f"Label {label}: Dice={m['Dice']:.3f}")
+        """
+        from . import metrics as met
+
+        other_img = getmeTheSimpleITKImage(other)
+        other_img = met._ensure_same_geometry(self.getImage(), other_img)
+
+        if labels is None:
+            arr_self = self.getImageAsNumpy()
+            arr_other = sitk.GetArrayFromImage(other_img)
+            labels = sorted(set(
+                int(v) for v in np.unique(arr_self) if v != 0
+            ) | set(
+                int(v) for v in np.unique(arr_other) if v != 0
+            ))
+
+        results = {}
+        for lbl in labels:
+            self_bin = sitk.Cast(sitk.Equal(self.getImage(), int(lbl)), sitk.sitkUInt8)
+            other_bin = sitk.Cast(sitk.Equal(other_img, int(lbl)), sitk.sitkUInt8)
+            # Skip if both empty
+            s_sum = sitk.GetArrayFromImage(self_bin).sum()
+            o_sum = sitk.GetArrayFromImage(other_bin).sum()
+            if s_sum == 0 and o_sum == 0:
+                continue
+            results[lbl] = met.compare_segmentations(self_bin, other_bin)
+        return results
+
+    # ========================================================================
+    # LABEL-MAP PRIORS
+    # ========================================================================
+
+    def buildPriors(self, tau=0.8, blur_sigma_mm=0.6, classes=None):
+        """
+        Build soft probability priors from this label map.
+
+        For each foreground class a sigmoid of the signed distance map
+        is computed and optionally blurred.  Returns a vector Imaginable
+        whose channels are ``[background, class_1, class_2, …]``.
+
+        Parameters
+        ----------
+        tau : float
+            Sigmoid steepness (smaller → sharper boundaries).
+        blur_sigma_mm : float
+            Gaussian anti-aliasing blur in mm (0 = no blur).
+        classes : list of int, optional
+            Foreground labels to include.  If *None*, auto-detected.
+
+        Returns
+        -------
+        prior_image : Imaginable
+            Vector (multi-channel) image with probability priors.
+        class_list : list[int]
+            Ordered label list matching channels.
+
+        Example
+        -------
+        >>> priors, cls = labelmap.buildPriors(tau=0.8)
+        >>> priors.write('priors.nii.gz')
+        """
+        from . import metrics as met
+        prior_vec, class_list = met.build_label_priors(
+            self.getImage(), classes=classes, tau=tau,
+            blur_sigma_mm=blur_sigma_mm,
+        )
+        result = Imaginable(image=prior_vec)
+        return result, class_list
+
+    @staticmethod
+    def combineBinaryMasks(mask_list, priority_order=None):
+        """
+        Combine multiple binary masks into a single multi-label image.
+
+        Parameters
+        ----------
+        mask_list : list of Roiable or sitk.Image
+            Binary masks (same geometry).  >0 = foreground.
+        priority_order : list of int, optional
+            Overwrite order (indices into *mask_list*).  Last wins.
+
+        Returns
+        -------
+        LabelMapable
+            Multi-label image (labels 1..K).
+
+        Example
+        -------
+        >>> lm = LabelMapable.combineBinaryMasks([bone_roi, cartilage_roi])
+        """
+        from . import metrics as met
+        imgs = [getmeTheSimpleITKImage(m) for m in mask_list]
+        lab_img = met.combine_binary_masks_to_label(imgs, priority_order)
+        lm = LabelMapable(image=lab_img)
+        return lm
+
+    # ========================================================================
+    # SEGMENTATION REFINEMENT METHODS
+    # ========================================================================
+
+    def refineLabel(self, label_value, image, method='watershed', **kwargs):
+        """
+        Refine a single label using the specified segmentation method.
+
+        The label is extracted as a Roiable, refined, and written back.
+
+        Parameters
+        ----------
+        label_value : int
+            Label to refine.
+        image : Imaginable or sitk.Image
+            Reference intensity image.
+        method : str
+            One of ``'watershed'``, ``'region_growing'``, ``'gac'``,
+            ``'expand'``, ``'shrink'``.
+        **kwargs
+            Extra parameters forwarded to the refinement method.
+
+        Returns
+        -------
+        self
+
+        Example
+        -------
+        >>> labelmap.refineLabel(1, scan, method='gac', propagation=0.3)
+        """
+        roi = self.extractLabel(label_value)
+        method_map = {
+            'watershed': roi.refineWatershed,
+            'region_growing': roi.refineRegionGrowing,
+            'gac': roi.refineGeodesicActiveContour,
+            'expand': roi.expandByProbability,
+            'shrink': roi.shrinkByProbability,
+        }
+        fn = method_map.get(method)
+        if fn is None:
+            raise ValueError(
+                f"Unknown method '{method}'. "
+                f"Choose from: {list(method_map.keys())}"
+            )
+        fn(image, **kwargs)
+        self.setLabel(label_value, roi)
+        return self
+
+    def refineAllLabels(self, image, method='watershed',
+                        resolve_overlaps=True, **kwargs):
+        """
+        Refine every non-zero label and optionally resolve overlaps.
+
+        Parameters
+        ----------
+        image : Imaginable or sitk.Image
+            Reference intensity image.
+        method : str
+            Refinement method (see ``refineLabel``).
+        resolve_overlaps : bool
+            If *True*, overlapping voxels between labels are assigned
+            to the nearest label centroid after refinement.
+        **kwargs
+            Extra parameters forwarded to the refinement method.
+
+        Returns
+        -------
+        self
+
+        Example
+        -------
+        >>> labelmap.refineAllLabels(scan, method='gac', propagation=0.3)
+        """
+        labels = self.getLabels(exclude_background=True)
+        for lbl in labels:
+            self.refineLabel(lbl, image, method=method, **kwargs)
+        if resolve_overlaps and len(labels) > 1:
+            self.resolveOverlaps()
+        return self
+
+    def resolveOverlaps(self):
+        """
+        Resolve overlapping voxels between labels.
+
+        Overlapping voxels are assigned to the label whose centroid
+        is closest (Euclidean distance in mm).
+
+        Returns
+        -------
+        self
+
+        Example
+        -------
+        >>> labelmap.resolveOverlaps()
+        """
+        from . import segmentation as seg
+        labels = self.getLabels(exclude_background=True)
+        if len(labels) < 2:
+            return self
+
+        # Extract per-label binary ROIs
+        label_rois = {}
+        for lbl in labels:
+            label_rois[lbl] = self.extractLabel(lbl).getImage()
+
+        # Resolve
+        resolved = seg.resolve_label_overlaps(label_rois, reference=self.getImage())
+
+        # Rebuild label map
+        arr = np.zeros_like(self.getImageAsNumpy(), dtype=self.getImageAsNumpy().dtype)
+        for lbl in labels:
+            roi_arr = sitk.GetArrayFromImage(resolved[lbl]) > 0
+            arr[roi_arr] = lbl
+
+        self.setImageFromNumpy(arr, refimage=self.getImage())
+        return self
+
+    # ========================================================================
     # MULTI-LABEL DEFORMATION METHODS
     # ========================================================================
 
@@ -2830,7 +3927,116 @@ class LabelMapable(Imaginable):
         
         return self.setImage(warped, f"applied displacement field to label map from {displacement_field if isinstance(displacement_field, str) else 'field object'}")
 
-        
+    # ========================================================================
+    # REGISTRATION & LONGITUDINAL ANALYSIS
+    # ========================================================================
+
+    def registerTo(self, other, method='rigid', roi_values=None, iterations=200):
+        """
+        Register this label map onto *other* using signed-distance maps.
+
+        A union mask of all (or specified) labels is used for registration.
+        The result is this label map resampled into *other*'s space.
+
+        Parameters
+        ----------
+        other : LabelMapable or sitk.Image
+            Fixed (target) label map.
+        method : str
+            ``'rigid'`` (Euler3D) or ``'affine'``.
+        roi_values : list[int], optional
+            Labels to include in the union mask for registration.
+            If *None*, all non-zero labels are used.
+        iterations : int
+            Max optimiser iterations.
+
+        Returns
+        -------
+        (registered, transform) : tuple[LabelMapable, sitk.Transform]
+            ``registered`` is this label map warped into *other*'s space.
+
+        Example
+        -------
+        >>> post_reg, T = post_labels.registerTo(pre_labels, method='rigid')
+        """
+        from . import metrics as met
+        other_img = getmeTheSimpleITKImage(other)
+        self_img = self.getImage()
+
+        # Build union masks
+        if roi_values is None:
+            self_arr = sitk.GetArrayFromImage(self_img)
+            roi_values = sorted(int(v) for v in np.unique(self_arr) if v != 0)
+
+        def _union(img, vals):
+            m = sitk.Equal(img, vals[0])
+            for v in vals[1:]:
+                m = m | sitk.Equal(img, v)
+            return sitk.Cast(m, sitk.sitkUInt8)
+
+        fixed_mask = _union(other_img, roi_values)
+        moving_mask = _union(self_img, roi_values)
+
+        # Register on signed distance maps
+        _, transform = met.rigid_register_masks(
+            fixed_mask, moving_mask,
+            method=method, iterations=iterations,
+        )
+
+        # Resample entire label map with nearest-neighbor
+        resampled = sitk.Resample(
+            sitk.Cast(self_img, sitk.sitkUInt16),
+            other_img,
+            transform,
+            sitk.sitkNearestNeighbor,
+            0,
+            sitk.sitkUInt16,
+        )
+        result = LabelMapable(image=resampled)
+        return result, transform
+
+    def getChangeMapsByLabel(self, other, labels=None):
+        """
+        Per-label change maps between this label map (pre) and *other* (post).
+
+        Parameters
+        ----------
+        other : LabelMapable or sitk.Image
+            Post-registration label map (should be on the same grid).
+        labels : list[int], optional
+            Labels to analyse.  If *None*, all non-zero labels from both
+            images are used.
+
+        Returns
+        -------
+        dict[int, dict[str, Roiable]]
+            ``{label: {'removed': Roiable, 'added': Roiable, 'changed': Roiable}}``
+
+        Example
+        -------
+        >>> changes = pre.getChangeMapsByLabel(post_registered)
+        >>> changes[1]['removed'].write('roi1_removed.nii.gz')
+        """
+        from . import metrics as met
+        other_img = getmeTheSimpleITKImage(other)
+        other_img = met._ensure_same_geometry(self.getImage(), other_img)
+
+        if labels is None:
+            pre_arr = sitk.GetArrayFromImage(self.getImage())
+            post_arr = sitk.GetArrayFromImage(other_img)
+            labels = sorted(
+                set(int(v) for v in np.unique(pre_arr) if v != 0)
+                | set(int(v) for v in np.unique(post_arr) if v != 0)
+            )
+
+        result = {}
+        for lbl in labels:
+            pre_bin = sitk.Cast(sitk.Equal(self.getImage(), lbl), sitk.sitkUInt8)
+            post_bin = sitk.Cast(sitk.Equal(other_img, lbl), sitk.sitkUInt8)
+            maps = met.compute_change_maps(pre_bin, post_bin)
+            result[lbl] = {k: Roiable(image=v) for k, v in maps.items()}
+        return result
+
 
 class LabelMapableROI(LabelMapable):
     """Old class for Labelmapable
