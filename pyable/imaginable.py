@@ -476,6 +476,292 @@ class Imaginable:
         return sitk2vtk(self.getImage())
     
     
+    def overlayReport(
+        self,
+        overlay,
+        spacing=None,
+        orientation='LPS',
+        views='all',
+        slice_offsets=None,
+        fill_alpha=0.20,
+        contour_alpha=0.95,
+        overlay_color=(1.0, 0.0, 0.0),
+        contour_iterations=2,
+        image_cmap='gray',
+        figsize=None,
+        title=None,
+        show=False,
+        save=None,
+        dpi=150,
+        stats=True,
+    ):
+        """Generate a publication-ready overlay report figure.
+
+        Creates a multi-view (axial/coronal/sagittal) overlay of a
+        Roiable, LabelMapable, or any Imaginable on top of *self*.
+        Both images are oriented to a canonical orientation and optionally
+        resampled to isotropic resolution before slicing.
+
+        Parameters
+        ----------
+        overlay : Imaginable | Roiable | LabelMapable
+            The overlay image.  Binary masks get a filled region + bold
+            contour; multi-label maps use the provided ``overlay_color``
+            for non-zero voxels.
+        spacing : list[float] | float | None
+            Target isotropic spacing in mm (e.g. ``1.5`` or ``[1.5, 1.5, 1.5]``).
+            ``None`` keeps the original spacing.
+        orientation : str
+            Three-letter DICOM orientation code applied to **both**
+            images before slicing (default ``'LPS'``).
+        views : str | list[str]
+            ``'all'`` (default) → ``['axial', 'coronal', 'sagittal']``,
+            or a subset list, or a single view name.
+        slice_offsets : list[int] | None
+            Offsets (in voxels) from the overlay center-of-mass.
+            ``None`` → ``[0]`` (center slice only).
+        fill_alpha : float
+            Opacity of the filled overlay region (0–1).
+        contour_alpha : float
+            Opacity of the bold boundary contour (0–1).
+        overlay_color : tuple[float, float, float]
+            RGB colour for overlay fill and contour (0–1 range).
+        contour_iterations : int
+            Dilation iterations for contour thickness (0 = no contour).
+        image_cmap : str
+            Matplotlib colormap name for the background image.
+        figsize : tuple | None
+            ``(width, height)`` in inches.  ``None`` auto-computes.
+        title : str | None
+            Figure suptitle.  ``None`` auto-generates.
+        show : bool
+            Call ``plt.show()`` after rendering.
+        save : str | None
+            File path to save the figure (PNG, PDF, …).
+        dpi : int
+            DPI used when saving.
+        stats : bool
+            If ``True`` add an extra column with volume / mean / std
+            statistics for the overlay region.
+
+        Returns
+        -------
+        dict
+            ``{'figure': fig, 'axes': axes_array, 'stats': stats_dict}``
+
+        Examples
+        --------
+        >>> from pyable import Imaginable, Roiable
+        >>> img = Imaginable('t1.nii.gz')
+        >>> roi = Roiable('tumor.nii.gz')
+        >>> img.overlayReport(roi, spacing=1.5, save='report.png')
+
+        >>> # specific views, custom colour
+        >>> img.overlayReport(roi, views=['axial','coronal'],
+        ...                   overlay_color=(0, 1, 0), fill_alpha=0.3)
+
+        >>> # LabelMapable overlay
+        >>> from pyable import LabelMapable
+        >>> seg = LabelMapable('seg.nii.gz')
+        >>> img.overlayReport(seg, spacing=[1,1,1], orientation='RAS')
+        """
+        import copy
+        import matplotlib
+        import matplotlib.pyplot as plt
+        import matplotlib.cm as mcm
+        from scipy import ndimage
+
+        # ── Resolve parameters ──────────────────────────────────────
+        if isinstance(spacing, (int, float)):
+            spacing = [float(spacing)] * 3
+        if isinstance(views, str):
+            views = ['axial', 'coronal', 'sagittal'] if views == 'all' else [views]
+        views = [v.lower() for v in views]
+        if slice_offsets is None:
+            slice_offsets = [0]
+        overlay_color = np.array(overlay_color, dtype=np.float64)
+
+        view_axis_map = {'axial': 0, 'coronal': 1, 'sagittal': 2}
+
+        # ── Prepare working copies ──────────────────────────────────
+        img_work = copy.deepcopy(self)
+        ovl_work = copy.deepcopy(overlay)
+
+        # Orient both to the same canonical orientation
+        img_work.dicomOrient(orientation)
+        ovl_work.dicomOrient(orientation)
+
+        # Resample to target spacing
+        if spacing is not None:
+            img_work.changeImageSpacing(spacing)
+            ovl_work.changeImageSpacing(spacing)
+
+        # Resample overlay onto image grid for guaranteed shape match
+        ovl_sitk = sitk.Resample(
+            ovl_work.getImage(),
+            img_work.getImage(),
+            sitk.Transform(),
+            sitk.sitkNearestNeighbor,
+            0.0,
+            ovl_work.getImage().GetPixelID(),
+        )
+        ovl_work.setImage(ovl_sitk)
+
+        img_arr = img_work.getImageAsNumpy().astype(np.float64)
+        ovl_arr = ovl_work.getImageAsNumpy().astype(np.float64)
+        ovl_mask = (ovl_arr > 0).astype(np.uint8)
+
+        # ── Find center of mass of overlay ──────────────────────────
+        if ovl_mask.max() > 0:
+            com = ndimage.center_of_mass(ovl_mask)
+            center = tuple(int(round(c)) for c in com)
+        else:
+            s = ovl_mask.shape
+            center = (s[0] // 2, s[1] // 2, s[2] // 2)
+
+        # ── Helper: normalise a 2D slice ────────────────────────────
+        def _norm(slc):
+            valid = slc[slc > 0]
+            if valid.size > 0:
+                p1, p99 = np.percentile(valid, [1, 99])
+            else:
+                p1, p99 = 0.0, 1.0
+            if p99 <= p1:
+                p99 = p1 + 1.0
+            return np.clip((slc - p1) / (p99 - p1), 0.0, 1.0)
+
+        # ── Helper: contour of a 2D mask ────────────────────────────
+        def _contour(m2d):
+            if m2d.max() == 0 or contour_iterations <= 0:
+                return np.zeros_like(m2d, dtype=bool)
+            struct = ndimage.generate_binary_structure(2, 2)
+            dilated = ndimage.binary_dilation(m2d > 0, structure=struct,
+                                              iterations=contour_iterations)
+            eroded = ndimage.binary_erosion(m2d > 0, structure=struct,
+                                            iterations=max(1, contour_iterations - 1))
+            return dilated & ~eroded
+
+        # ── Helper: overlay onto RGB ────────────────────────────────
+        def _apply_overlay(rgb, mask2d):
+            m = mask2d > 0
+            if not m.any():
+                return rgb
+            for c in range(3):
+                rgb[:, :, c] = np.where(
+                    m,
+                    rgb[:, :, c] * (1.0 - fill_alpha) + overlay_color[c] * fill_alpha,
+                    rgb[:, :, c],
+                )
+            ct = _contour(mask2d)
+            if ct.any():
+                for c in range(3):
+                    rgb[:, :, c] = np.where(
+                        ct,
+                        rgb[:, :, c] * (1.0 - contour_alpha) + overlay_color[c] * contour_alpha,
+                        rgb[:, :, c],
+                    )
+            return rgb
+
+        # ── Helper: extract & flip 2D slice ─────────────────────────
+        def _slice(vol, axis, idx):
+            idx = int(np.clip(idx, 0, vol.shape[axis] - 1))
+            slc = np.take(vol, idx, axis=axis).astype(np.float64)
+            return np.flipud(slc)
+
+        # ── Compute ROI stats ───────────────────────────────────────
+        spx = spacing if spacing is not None else list(img_work.getImageSpacing())
+        vox_vol_ml = float(np.prod(spx[:3])) / 1000.0
+        n_vox = int(ovl_mask.sum())
+        vol_ml = round(n_vox * vox_vol_ml, 2)
+        if n_vox > 0:
+            vals = img_arr[ovl_mask > 0]
+            mean_v, std_v = round(float(np.mean(vals)), 2), round(float(np.std(vals)), 2)
+        else:
+            mean_v = std_v = 0.0
+        stats_dict = {'n_voxels': n_vox, 'volume_ml': vol_ml,
+                      'mean': mean_v, 'std': std_v}
+
+        # ── Figure layout ───────────────────────────────────────────
+        n_offsets = len(slice_offsets)
+        n_views = len(views)
+        n_cols = n_views * n_offsets + (1 if stats else 0)
+        width_ratios = [1.0] * (n_views * n_offsets)
+        if stats:
+            width_ratios.append(0.45)
+
+        if figsize is None:
+            figsize = (n_cols * 4.0, 4.5)
+
+        fig, axes = plt.subplots(
+            1, n_cols, figsize=figsize, facecolor='black',
+            gridspec_kw={'width_ratios': width_ratios},
+        )
+        if n_cols == 1:
+            axes = np.array([axes])
+
+        if title is None:
+            sp_txt = f'{spacing[0]} mm iso' if spacing else 'native'
+            title = f'Overlay Report  ({orientation}, {sp_txt})'
+        fig.suptitle(title, color='white', fontsize=14, fontweight='bold', y=1.02)
+
+        # ── Render panels ───────────────────────────────────────────
+        col = 0
+        for view_name in views:
+            axis_num = view_axis_map[view_name]
+            for offset in slice_offsets:
+                idx = center[axis_num] + offset
+                slc = _slice(img_arr, axis_num, idx)
+                msk = _slice(ovl_mask, axis_num, idx)
+
+                slc_n = _norm(slc)
+                # Apply cmap
+                cmap_fn = matplotlib.colormaps.get_cmap(image_cmap)
+                rgb = cmap_fn(slc_n)[:, :, :3].copy()
+                rgb = _apply_overlay(rgb, msk)
+                rgb = np.clip(rgb, 0, 1)
+
+                ax = axes[col]
+                ax.imshow(rgb, aspect='equal')
+                ax.set_facecolor('black')
+                ax.set_xticks([])
+                ax.set_yticks([])
+
+                lbl = view_name.capitalize()
+                if len(slice_offsets) > 1:
+                    lbl += f'\n(offset {offset:+d})'
+                ax.set_title(lbl, color='white', fontsize=11, fontweight='bold')
+                col += 1
+
+        # ── Stats column ────────────────────────────────────────────
+        if stats:
+            ax_s = axes[col]
+            ax_s.set_facecolor('black')
+            ax_s.set_xticks([])
+            ax_s.set_yticks([])
+            for sp in ax_s.spines.values():
+                sp.set_visible(False)
+            txt = (
+                f"Volume\n{stats_dict['volume_ml']:.2f} mL\n"
+                f"({stats_dict['n_voxels']} vox)\n\n"
+                f"Mean\n{stats_dict['mean']:.1f}\n\n"
+                f"Std\n{stats_dict['std']:.1f}"
+            )
+            ax_s.text(0.5, 0.5, txt, color='white', fontsize=11,
+                      fontweight='bold', ha='center', va='center',
+                      transform=ax_s.transAxes, family='monospace')
+            ax_s.set_title('Stats', color='white', fontsize=11,
+                           fontweight='bold')
+
+        plt.tight_layout()
+
+        if save:
+            fig.savefig(save, dpi=dpi, facecolor='black', bbox_inches='tight')
+        if show:
+            plt.show()
+
+        return {'figure': fig, 'axes': axes, 'stats': stats_dict}
+
+
     def overlayAble(self,secondimaginable, axis,index,image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None,title=None,labelmap_name=None):
         """_summary_
 
