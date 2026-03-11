@@ -290,6 +290,12 @@ def getSITKImageInfo(nda):
 
 
 class Imaginable:
+    """
+    Base mutable wrapper around a ``SimpleITK.Image``.
+
+    The class stores image history in an internal stack so geometry edits,
+    arithmetic, transforms, and filtering can be chained and undone.
+    """
     def __init__(self,filename=None,image=None,verbose=False):
         self.verbose=verbose
         self.dfltInterpolator=sitk.sitkLinear
@@ -1560,6 +1566,27 @@ class Imaginable:
         # Apply the padding filter to the image
         self.setImage(padding_filter.Execute(image),f'image padded by {lower_padding} and {upper_padding} with constant {padding_value}')
         return  self        
+    def getPaddedImage(self, padding, padding_value=0):
+        """
+        Return a padded copy of the current image.
+
+        Parameters
+        ----------
+        padding : int or sequence of int
+            Symmetric padding applied to the lower and upper bounds.
+        padding_value : int or float, optional
+            Constant used to fill the padded region.
+
+        Returns
+        -------
+        Imaginable
+            A duplicate image with the requested padding applied.
+        """
+        if isinstance(padding, numbers.Number):
+            padding = [int(padding)] * self.getImageDimension()
+        padded = self.getDuplicate()
+        padded.padImage(list(padding), list(padding), padding_value=padding_value)
+        return padded
     def cropImage(self,lowerB,upperB,coordinates=None):
         PP="voxels"
         image=self.getImage()
@@ -1671,7 +1698,7 @@ class Imaginable:
     def getImageCenterCoordinate(self):
         return self.getCoordinatesFromIndex(self.getImageCenterIndex())
 
-    def rotateImage(self,rotation,center=None, centerindex=False,translation=None,interpolator = None,reference_image=None ,default_value = 0.0,useNearestNeighborExtrapolator=None):
+    def rotateImage(self,rotation=None,center=None, centerindex=False,translation=None,interpolator = None,reference_image=None ,default_value = 0.0,useNearestNeighborExtrapolator=None, angle=None):
 
         """
         This function rotates an image across each of the x, y, z axes by theta_x, theta_y, and theta_z degrees
@@ -1685,6 +1712,17 @@ class Imaginable:
         :return: The rotated image
         
         """
+
+        dimension = self.getImageDimension()
+        if rotation is None:
+            if angle is None:
+                raise ValueError("Either rotation or angle must be provided.")
+            rotation = [0.0] * dimension
+            rotation[min(2, dimension - 1)] = float(angle)
+        elif isinstance(rotation, numbers.Number):
+            scalar_rotation = float(rotation)
+            rotation = [0.0] * dimension
+            rotation[min(2, dimension - 1)] = scalar_rotation
 
         if interpolator == None:
             interpolator = self.dfltInterpolator
@@ -1701,13 +1739,13 @@ class Imaginable:
             T=[0.0]*self.getImageDimension()
         else:
             T=translation
-        if self.getImageDimension()==3:
+        if dimension==3:
             
             transform = sitk.Euler3DTransform (center,R[0], 
                                                 R[1], 
                                                 R[2],T)
 
-        elif self.getImageDimension()==2:
+        elif dimension==2:
             transform = sitk.Euler2DTransform ()
             transform.SetAngle(R[0])
             transform.SetCenter(center)
@@ -2085,11 +2123,19 @@ class Imaginable:
             w=str(toadd)
         return self.__filterSelfAndImage__(sitk.AddImageFilter(),toadd,f'add {w}')
 
+    def addImage(self, toadd):
+        """Backward-compatible alias for :meth:`add`."""
+        return self.add(toadd)
+
     def multiply(self, toadd):
         w="Image"
         if not isinstance(toadd,numbers.Number):
             w=str(toadd)
         return self.__filterSelfAndImageMat__(sitk.MultiplyImageFilter(),toadd,f'multiply {w}')
+
+    def multiplyImage(self, toadd):
+        """Backward-compatible alias for :meth:`multiply`."""
+        return self.multiply(toadd)
 
 
 
@@ -2099,12 +2145,20 @@ class Imaginable:
             w=str(toadd)
         return self.__filterSelfAndImage__(sitk.SubtractImageFilter(),toadd,f'subtract {w}')
 
+    def subtractImage(self, toadd):
+        """Backward-compatible alias for :meth:`subtract`."""
+        return self.subtract(toadd)
+
     def divide(self, toadd):
         w="Image"
 
         if not isinstance(toadd,numbers.Number):
             w=str(toadd)
         return self.__filterSelfAndImageMat__(sitk.DivideImageFilter(),toadd,f'divide {w}')
+
+    def divideImage(self, toadd):
+        """Backward-compatible alias for :meth:`divide`."""
+        return self.divide(toadd)
 
 
     def __filterSelfAndImage__(self,filter,toadd,message):
@@ -2874,6 +2928,7 @@ def getDirectiontransform(image):
 
 
 class SITKImaginable(Imaginable):
+    """Thin ``Imaginable`` subclass kept for explicit scalar-image usage."""
     pass
 
 class Roiable(Imaginable):
@@ -3018,6 +3073,24 @@ class Roiable(Imaginable):
         )
         
         return self.setImage(warped, f"applied displacement field to ROI from {displacement_field if isinstance(displacement_field, str) else 'field object'}")
+
+    def applyTransformToROI(self, transform, target_image=None):
+        """
+        Backward-compatible alias for ``applyTransform`` on ROI data.
+
+        Parameters
+        ----------
+        transform : str or sitk.Transform
+            Transform file or transform object.
+        target_image : str or sitk.Image, optional
+            Optional reference geometry for the warped ROI.
+
+        Returns
+        -------
+        Roiable
+            Self for method chaining.
+        """
+        return self.applyTransform(transform, target_image=target_image)
 
     # ========================================================================
     # SEGMENTATION REFINEMENT METHODS
@@ -3761,6 +3834,12 @@ class Roiable(Imaginable):
 
 
 class LabelMapable(Imaginable):
+    """
+    Multi-label segmentation wrapper with label-preserving transforms.
+
+    This class extends ``Imaginable`` with per-label extraction, priors,
+    refinement, longitudinal comparison, and registration helpers.
+    """
     def __init__(self, filename=None, image=None, verbose=False):
         super().__init__(filename, image, verbose)
         self.dfltInterpolator=sitk.sitkNearestNeighbor
@@ -4213,6 +4292,24 @@ class LabelMapable(Imaginable):
         
         return self.setImage(warped, f"applied displacement field to label map from {displacement_field if isinstance(displacement_field, str) else 'field object'}")
 
+    def applyTransformToLabelMap(self, transform, target_image=None):
+        """
+        Backward-compatible alias for ``applyTransform`` on label maps.
+
+        Parameters
+        ----------
+        transform : str or sitk.Transform
+            Transform file or transform object.
+        target_image : str or sitk.Image, optional
+            Optional reference geometry for the warped label map.
+
+        Returns
+        -------
+        LabelMapable
+            Self for method chaining.
+        """
+        return self.applyTransform(transform, target_image=target_image)
+
     # ========================================================================
     # REGISTRATION & LONGITUDINAL ANALYSIS
     # ========================================================================
@@ -4376,6 +4473,7 @@ class LabelMapableROI(LabelMapable):
         return self
 
 class Fieldable(Imaginable):
+    """Vector/displacement-field flavored ``Imaginable``."""
     def __init__(self, filename=None, image=None, verbose=False):
         super().__init__(filename, image, verbose)
         self.dfltInterpolator=sitk.sitkNearestNeighbor
@@ -4485,5 +4583,3 @@ if __name__=="__main__":
     # A.divide(0.5)
     # A.applyAbs()
     # A.writeImageAs('/g/_fo.nii')
-
-

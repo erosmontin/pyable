@@ -13,17 +13,14 @@ import unittest
 import tempfile
 import numpy as np
 from pathlib import Path
+import sys
 import SimpleITK as sitk
 
-# Import pyable modules
-try:
-    from pyable import SITKImaginable, Roiable, LabelMapable
-    from pyable import deformations
-except ImportError:
-    import sys
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-    from pyable import SITKImaginable, Roiable, LabelMapable
-    from pyable import deformations
+# Ensure the workspace copy of pyable is imported before any installed package.
+sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
+
+from pyable import SITKImaginable, Roiable, LabelMapable
+from pyable import deformations
 
 
 class TestDeformationFieldInitialization(unittest.TestCase):

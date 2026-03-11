@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from pyable.imaginable import Imaginable, SITKImaginable, Roiable, LabelMapable, Fieldable
 from pyable.utilizers import RoiComparison
+from pyable.vectorable import Vectorable, TimeSeriesable
 
 
 class TestImaginableInitialization:
@@ -299,6 +300,78 @@ class TestEdgeCases:
         
         # Original should be unchanged
         assert imaginable1.getImage().GetPixel([25, 25, 25]) == 100
+
+
+class TestVectorable:
+    """Test vector-field-specific helpers."""
+
+    def test_vectorable_describe_includes_magnitude_stats(self):
+        """Vector describe() should report vector statistics without errors."""
+        vector_img = sitk.Image([8, 8, 8], sitk.sitkVectorFloat32, 3)
+        vectorable = Vectorable(image=vector_img)
+
+        info = vectorable.describe()
+
+        assert info["num_components"] == 3
+        assert "magnitude_mean" in info
+        assert "vector_error" not in info
+
+
+class TestTimeSeriesable:
+    """Test 4D time-series geometry and temporal reductions."""
+
+    def setup_method(self):
+        """Create a small 4D scalar image with explicit metadata."""
+        frames = [np.full((6, 6, 6), fill_value=float(i), dtype=np.float32) for i in range(4)]
+        array_4d = np.stack(frames, axis=0)
+        self.image = sitk.GetImageFromArray(array_4d, isVector=False)
+        self.image.SetOrigin((10.0, 20.0, 30.0, 40.0))
+        self.image.SetSpacing((1.1, 1.2, 1.3, 2.0))
+        self.image.SetDirection(tuple(np.eye(4).reshape(-1)))
+
+    def test_get_frame_range_preserves_4d_metadata(self):
+        """Extracting a range of frames should keep a valid 4D image."""
+        series = TimeSeriesable(image=self.image)
+
+        subset = series.getFrameRange(1, 3)
+
+        assert subset.getImage().GetDimension() == 4
+        assert list(subset.getImage().GetSize()) == [6, 6, 6, 2]
+        assert list(subset.getImage().GetSpacing()) == [1.1, 1.2, 1.3, 2.0]
+        assert list(subset.getImage().GetOrigin()) == [10.0, 20.0, 30.0, 42.0]
+        subset_array = sitk.GetArrayFromImage(subset.getImage())
+        assert set(np.unique(subset_array)) == {1.0, 2.0}
+
+    def test_temporal_statistics_keep_spatial_geometry(self):
+        """Temporal mean and variance should become valid 3D spatial images."""
+        series = TimeSeriesable(image=self.image)
+
+        mean_img = series.getTemporalMean()
+        var_img = series.getTemporalVariance()
+
+        assert mean_img.getImage().GetDimension() == 3
+        assert list(mean_img.getImage().GetOrigin()) == [10.0, 20.0, 30.0]
+        assert list(mean_img.getImage().GetSpacing()) == [1.1, 1.2, 1.3]
+        assert list(var_img.getImage().GetOrigin()) == [10.0, 20.0, 30.0]
+        assert np.allclose(sitk.GetArrayFromImage(mean_img.getImage()), 1.5)
+        assert np.allclose(sitk.GetArrayFromImage(var_img.getImage()), 1.25)
+
+    def test_set_frame_rebuilds_valid_4d_image(self):
+        """Replacing a frame should preserve 4D shape and metadata."""
+        series = TimeSeriesable(image=self.image)
+
+        replacement = sitk.GetImageFromArray(np.full((6, 6, 6), 9.0, dtype=np.float32), isVector=False)
+        replacement.SetOrigin((10.0, 20.0, 30.0))
+        replacement.SetSpacing((1.1, 1.2, 1.3))
+        replacement.SetDirection(tuple(np.eye(3).reshape(-1)))
+
+        updated = series.setFrame(0, replacement)
+
+        assert updated.getImage().GetDimension() == 4
+        assert list(updated.getImage().GetSize()) == [6, 6, 6, 4]
+        assert list(updated.getImage().GetOrigin()) == [10.0, 20.0, 30.0, 40.0]
+        updated_array = sitk.GetArrayFromImage(updated.getImage())
+        assert np.allclose(updated_array[0], 9.0)
 
 
 class TestPixelTypeConversions:

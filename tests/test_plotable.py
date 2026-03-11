@@ -12,21 +12,17 @@ import numpy as np
 import SimpleITK as sitk
 import tempfile
 from pathlib import Path
+import sys
 import matplotlib.pyplot as plt
 
-try:
-    from pyable import (
-        Imaginable, Vectorable, TimeSeriesable,
-        PlotViewer, ScalarPlotter, VectorPlotter, TimeSeriesPlotter,
-        plotOverlay
-    )
-except ImportError:
-    from pyable.imaginable import Imaginable
-    from pyable.vectorable import Vectorable, TimeSeriesable
-    from pyable.plotable import (
-        PlotViewer, ScalarPlotter, VectorPlotter, TimeSeriesPlotter,
-        plotOverlay
-    )
+# Ensure the workspace copy of pyable is imported before any installed package.
+sys.path.insert(0, str(Path(__file__).parent.parent.resolve()))
+
+from pyable import (
+    Imaginable, Vectorable, TimeSeriesable,
+    PlotViewer, ScalarPlotter, VectorPlotter, TimeSeriesPlotter,
+    plotOverlay
+)
 
 
 # ============================================================================
@@ -820,4 +816,3 @@ class TestIntegrationNewFeatures:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
-

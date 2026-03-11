@@ -84,8 +84,9 @@ class Vectorable(Imaginable):
         super().__init__(filename, image, verbose)
         
         # Verify it's a vector image if provided
-        if image is not None:
-            if image.GetNumberOfComponentsPerPixel() == 1:
+        current_image = self.getImage()
+        if current_image is not None:
+            if current_image.GetNumberOfComponentsPerPixel() == 1:
                 raise ValueError("Vectorable expects vector images (components > 1), use Imaginable for scalar images")
     
     def getNumberOfComponents(self) -> int:
@@ -308,6 +309,9 @@ class Vectorable(Imaginable):
             'min': float(np.min(magnitude_array)),
             'max': float(np.max(magnitude_array)),
         }
+
+    # Backward-compatible alias used by legacy callers.
+    getStatistics = getVectorStatistics
     
     def getMeanVector(self) -> np.ndarray:
         """
@@ -344,7 +348,7 @@ class Vectorable(Imaginable):
         info = super().describe() if hasattr(super(), 'describe') else {}
         try:
             info['num_components'] = self.getNumberOfComponents()
-            stats = self.getStatistics()
+            stats = self.getVectorStatistics()
             if stats:
                 for k, v in stats.items():
                     info[f'magnitude_{k}'] = v
@@ -525,9 +529,32 @@ class TimeSeriesable(Imaginable):
         super().__init__(filename, image, verbose)
         
         # Verify it's 4D
-        if image is not None:
-            if image.GetDimension() != 4:
-                raise ValueError(f"TimeSeriesable expects 4D images, got {image.GetDimension()}D")
+        current_image = self.getImage()
+        if current_image is not None and current_image.GetDimension() != 4:
+            raise ValueError(f"TimeSeriesable expects 4D images, got {current_image.GetDimension()}D")
+
+    def _build_4d_image(self, array_4d: np.ndarray, start_frame: int = 0) -> sitk.Image:
+        """Create a 4D scalar SimpleITK image while preserving time-series metadata."""
+        image_4d = sitk.GetImageFromArray(array_4d, isVector=False)
+        source = self.getImage()
+        origin = list(source.GetOrigin())
+        spacing = list(source.GetSpacing())
+        if len(origin) > 3 and len(spacing) > 3:
+            origin[3] = origin[3] + spacing[3] * start_frame
+        image_4d.SetOrigin(tuple(origin))
+        image_4d.SetSpacing(tuple(spacing))
+        image_4d.SetDirection(source.GetDirection())
+        return image_4d
+
+    def _build_spatial_image(self, array_3d: np.ndarray) -> sitk.Image:
+        """Create a 3D scalar image from a temporal reduction."""
+        image_3d = sitk.GetImageFromArray(array_3d, isVector=False)
+        source = self.getImage()
+        direction_4d = np.asarray(source.GetDirection(), dtype=float).reshape((4, 4))
+        image_3d.SetOrigin(tuple(source.GetOrigin()[:3]))
+        image_3d.SetSpacing(tuple(source.GetSpacing()[:3]))
+        image_3d.SetDirection(tuple(direction_4d[:3, :3].reshape(-1)))
+        return image_3d
     
     def getNumberOfFrames(self) -> int:
         """
@@ -561,7 +588,7 @@ class TimeSeriesable(Imaginable):
         >>> frame0 = ts.getFrame(0)
         >>> frame5 = ts.getFrame(5)
         """
-        if frame_index >= self.getNumberOfFrames():
+        if frame_index < 0 or frame_index >= self.getNumberOfFrames():
             raise IndexError(f"Frame {frame_index} out of range ({self.getNumberOfFrames()} frames)")
         
         # Use ExtractImageFilter to get single frame
@@ -603,17 +630,24 @@ class TimeSeriesable(Imaginable):
         """
         if isinstance(frame_image, Imaginable):
             frame_image = frame_image.getImage()
+
+        if frame_index < 0 or frame_index >= self.getNumberOfFrames():
+            raise IndexError(f"Frame {frame_index} out of range ({self.getNumberOfFrames()} frames)")
         
         # Get current 4D image as numpy
         current_4d = sitk.GetArrayFromImage(self.getImage())
         new_frame = sitk.GetArrayFromImage(frame_image)
+
+        if new_frame.shape != current_4d[frame_index].shape:
+            raise ValueError(
+                f"Frame shape mismatch: expected {current_4d[frame_index].shape}, got {new_frame.shape}"
+            )
         
         # Replace frame
         current_4d[frame_index] = new_frame
         
         # Convert back
-        result_image = sitk.GetImageFromArray(current_4d)
-        result_image.CopyInformation(self.getImage())
+        result_image = self._build_4d_image(current_4d)
         
         return self.setImage(result_image, f"frame {frame_index} replaced")
     
@@ -638,17 +672,16 @@ class TimeSeriesable(Imaginable):
         >>> ts = TimeSeriesable('cardiac_4d.nii.gz')
         >>> systole_range = ts.getFrameRange(3, 7)  # Frames 3-6
         """
+        if start < 0 or end > self.getNumberOfFrames() or start >= end:
+            raise IndexError(
+                f"Invalid frame range [{start}, {end}) for {self.getNumberOfFrames()} frames"
+            )
+
         # Extract subset using numpy indexing
         array_4d = sitk.GetArrayFromImage(self.getImage())
-        subset = array_4d[start:end]
+        subset = array_4d[start:end].copy()
         
-        result_image = sitk.GetImageFromArray(subset)
-        result_image.CopyInformation(self.getImage())
-        
-        # Adjust size
-        new_size = list(self.getImageSize())
-        new_size[3] = end - start
-        result_image.SetSize(new_size)
+        result_image = self._build_4d_image(subset, start_frame=start)
         
         result = TimeSeriesable(image=result_image)
         return result
@@ -671,12 +704,7 @@ class TimeSeriesable(Imaginable):
         array_4d = sitk.GetArrayFromImage(self.getImage())
         mean_array = np.mean(array_4d, axis=0)
         
-        result_image = sitk.GetImageFromArray(mean_array)
-        # Copy spatial geometry from first frame
-        spatial_info = self.getImage()
-        result_image.SetOrigin(spatial_info.GetOrigin()[:3])
-        result_image.SetSpacing(spatial_info.GetSpacing()[:3])
-        result_image.SetDirection(spatial_info.GetDirection()[:9])  # 3x3 submatrix
+        result_image = self._build_spatial_image(mean_array)
         
         result = Imaginable(image=result_image)
         return result
@@ -693,11 +721,7 @@ class TimeSeriesable(Imaginable):
         array_4d = sitk.GetArrayFromImage(self.getImage())
         var_array = np.var(array_4d, axis=0)
         
-        result_image = sitk.GetImageFromArray(var_array)
-        spatial_info = self.getImage()
-        result_image.SetOrigin(spatial_info.GetOrigin()[:3])
-        result_image.SetSpacing(spatial_info.GetSpacing()[:3])
-        result_image.SetDirection(spatial_info.GetDirection()[:9])
+        result_image = self._build_spatial_image(var_array)
         
         result = Imaginable(image=result_image)
         return result

@@ -1,102 +1,102 @@
 # pyable
-My collection of image and mesh functions
-based on SimpleITK
 
-1. imaginable
-1. meshable
+`pyable` is a SimpleITK-first toolkit for day-to-day medical image work. It wraps scalar images, binary ROIs, multi-label segmentations, vector fields, and 4D time series in chainable Python classes so common tasks stay short and readable.
 
----
+## What it gives you
 
-## 🔧 RECENT UPDATES (November 21, 2025)
-
-### ✨ NEW: Deformation & Registration Module (Phase 5)
-
-**Professional-grade support for image warping and registration transforms:**
-
-- **Deformation Module:** 650 lines of utilities for transforms and displacement fields
-- **Easy-to-Use API:** 5 new chainable methods on Imaginable, Roiable, LabelMapable
-- **Multi-Transform Support:** Rigid, affine, B-spline, displacement fields, composite
-- **Label Preservation:** Automatic nearest-neighbor for segmentation warping
-- **Comprehensive Docs:** 600+ lines with 15+ working examples
-- **100% Test Coverage:** 19 unit tests, all passing
-
-**Quick Example:**
-```python
-# Warp an image with a registration transform
-img = SITKImaginable('moving.nii.gz')
-img.applyDisplacementField('deformation.mha', target_image='fixed.nii.gz')
-img.write('warped.nii.gz')
-
-# Warp a segmentation (labels automatically preserved!)
-roi = Roiable('segmentation.nii.gz')
-roi.warpROI('deformation.mha')
-roi.write('warped_roi.nii.gz')
-
-# Method chaining
-img.applyTransform('transform.tfm').alignGeometry('fixed.nii.gz').cast('uint8')
-```
-
-**Documentation:** See [docs/DEFORMATION_WORKFLOW.md](docs/DEFORMATION_WORKFLOW.md)  
-**Summary:** See [DEFORMATION_IMPLEMENTATION_SUMMARY.md](DEFORMATION_IMPLEMENTATION_SUMMARY.md)
-
----
-
-### ✅ Previous Updates: Comprehensive Bug Fix & Testing Initiative (Phase 1-4)
-
-**7 Critical Bugs Fixed:** Logic errors, operator precedence, variable scope, NaN handling  
-**31+ Automated Tests Created:** Unit, integration, and regression test suites  
-**100% Test Pass Rate:** All validations passing (17/17 regression tests)  
-**100% Backward Compatible:** No breaking changes, full API stability maintained
-
-**Documentation:**
-- `BUGFIX_REPORT.md` - Detailed analysis of all fixes
-- `QUICKREF.md` - Quick reference guide
-- `CHANGES.md` - Complete change log with before/after code
-- `NAMING_ANALYSIS.md` - Function naming analysis (15 issues identified)
-
-**Status: ✅ Production Ready**
-
-For details, see [BUGFIX_REPORT.md](BUGFIX_REPORT.md)
-
----
+- A mutable, chainable API around `SimpleITK.Image`
+- Explicit NumPy conversion helpers for `(z, y, x)` and `(x, y, z)` layouts
+- ROI- and label-preserving transforms for registration/deformation workflows
+- Segmentation cleanup, refinement, overlap metrics, and morphometrics
+- Plotting helpers and interactive viewers for scalar, vector, and time-series data
+- Utility modules for deformations, segmentation, metrics, VTK conversion, and overlays
 
 ## Installation
 
-To install pyable v3:
-
-```
-python3 -m venv "pyable v3"
-source "pyable v3"/bin/activate
+```bash
+python -m venv .venv
+source .venv/bin/activate
 pip install git+https://github.com/erosmontin/pyable.git@v3
 ```
-## Cite Us
 
-1. Montin, E., Belfatto, A., Bologna, M., Meroni, S., Cavatorta, C., Pecori, E., Diletto, B., Massimino, M., Oprandi, M. C., Poggi, G., Arrigoni, F., Peruzzo, D., Pignoli, E., Gandola, L., Cerveri, P., & Mainardi, L. (2020). A multi-metric registration strategy for the alignment of longitudinal brain images in pediatric oncology. In Medical &amp; Biological Engineering &amp; Computing (Vol. 58, Issue 4, pp. 843–855). Springer Science and Business Media LLC. https://doi.org/10.1007/s11517-019-02109-4
+Requirements:
 
-1. Cavatorta, C., Meroni, S., Montin, E., Oprandi, M. C., Pecori, E., Lecchi, M., Diletto, B., Alessandro, O., Peruzzo, D., Biassoni, V., Schiavello, E., Bologna, M., Massimino, M., Poggi, G., Mainardi, L., Arrigoni, F., Spreafico, F., Verderio, P., Pignoli, E., & Gandola, L. (2021). Retrospective study of late radiation-induced damages after focal radiotherapy for childhood brain tumors. In S. D. Ginsberg (Ed.), PLOS ONE (Vol. 16, Issue 2, p. e0247748). Public Library of Science (PLoS). https://doi.org/10.1371/journal.pone.0247748
+- Python `>=3.9`
+- `numpy`
+- `SimpleITK`
+- `matplotlib`
+- `scikit-image`
+- `vtk`
+- `pandas`
+- `pynico`
 
-## Classes
-    - Imaginable:
-        image data 
-    - Roiable:
-        Mask with balue 1
-    - LabelaMapable
-    - LabelMapableROI:
-        Roi with multiple values (DEV)
-## versions:
-- 0.2.0 (Oct, 24)
-    - Fieldable
-- 0.1.0.6 (May, 24)
-    - LabelMap are Imaginable with interpolator = sitkNearestNeighbor and dfltuseNearestNeighborExtrapolator=True 
+## Quick start
 
-- 0.0.4 pre release
-    - updated the concept of change and set
-    - dflt interpolation and deflt usenearest..
-    - divide and multiply are casted to float and then cast back to their original pixeltype
-    - getWavelets
-    - left and right functions for HF (tested with Rview)
-    - WIP rigid_transform_3D resampleoncanonicalDirections() using [this git repo](https://github.com/nghiaho12/rigid_transform_3D/blob/master/test_rigid_transform_3D.py)
-    
-[*Dr. Eros Montin, PhD*](http://me.biodimensional.com)
-**46&2 just ahead of me!**
+```python
+from pyable import SITKImaginable, Roiable, LabelMapable
 
+# Scalar image
+img = SITKImaginable("image.nii.gz")
+img.rotateImage(angle=10).changeImageSpacing([1.0, 1.0, 1.0])
+arr = img.getImageAsNumpy()  # (z, y, x)
+
+# Binary ROI
+roi = Roiable("mask.nii.gz")
+roi.fillBinaryHoles().keepBiggestObj().warpROI("deformation.mha")
+metrics = roi.compareTo("reference_mask.nii.gz")
+
+# Multi-label map
+labels = LabelMapable("labels.nii.gz")
+bone = labels.extractLabel(1)
+priors, class_order = labels.buildPriors(tau=0.8)
+```
+
+## Main classes
+
+| Class | Role |
+| --- | --- |
+| `Imaginable` | Base wrapper for scalar `SimpleITK` images |
+| `SITKImaginable` | Thin alias/subclass of `Imaginable` |
+| `Roiable` | Binary mask / ROI operations |
+| `LabelMapable` | Multi-label segmentation workflows |
+| `LabelMapableROI` | Legacy label-map helper built from `Roiable` objects |
+| `Fieldable` | Vector/displacement field image wrapper |
+| `Vectorable` | Explicit vector-field analysis and visualization |
+| `TimeSeriesable` | 4D temporal image workflows |
+| `PlotViewer`, `ScalarPlotter`, `VectorPlotter`, `TimeSeriesPlotter`, `GridPlotter` | Static plotting helpers |
+| `InteractiveViewer`, `OverlayManager` | Interactive browsing and overlay management |
+| `RoiComparison` | Classic ROI overlap/similarity metrics |
+
+## Important behavior
+
+- Most mutating methods return `self`, so chaining is the normal usage pattern.
+- `getImageAsNumpy()` in v3 returns arrays in `(z, y, x)` order. Use `getImageAsNumpyXYZ()` if you need the legacy `(x, y, z)` view.
+- `Roiable` and `LabelMapable` default to nearest-neighbor resampling so labels stay discrete.
+- Geometry-sensitive methods assume images are in the same physical space unless they explicitly resample first.
+
+## Documentation
+
+- [Class and method reference](docs/CLASS_REFERENCE.md)
+- [Deformation workflow](docs/DEFORMATION_WORKFLOW.md)
+- [Plotting guide](docs/PLOTTING_GUIDE.md)
+- [Interactive viewer guide](docs/INTERACTIVE_VIEWER_GUIDE.md)
+- [Isosurface rendering guide](docs/ISOSURFACE_RENDERING_GUIDE.md)
+- [Vector and time-series guide](docs/VECTOR_AND_TIMESERIES_GUIDE.md)
+
+## Testing
+
+Run the workspace copy of the package, not a globally installed version:
+
+```bash
+PYTHONPATH=. pytest -q tests/test_phase2_unit_tests.py
+PYTHONPATH=. pytest -q tests/test_phase3_integration_tests.py
+PYTHONPATH=. pytest -q tests/test_phase5_deformations.py
+PYTHONPATH=. pytest -q tests/test_plotable.py
+```
+
+## Citation
+
+If `pyable` supports your work, please cite:
+
+1. Montin, E. et al. "A multi-metric registration strategy for the alignment of longitudinal brain images in pediatric oncology." Medical & Biological Engineering & Computing, 2020. https://doi.org/10.1007/s11517-019-02109-4
+2. Cavatorta, C. et al. "Retrospective study of late radiation-induced damages after focal radiotherapy for childhood brain tumors." PLOS ONE, 2021. https://doi.org/10.1371/journal.pone.0247748
