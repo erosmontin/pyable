@@ -1,21 +1,23 @@
+# pyable
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19119236.svg)](https://doi.org/10.5281/zenodo.19119236)
 
+**pyable** is a modern, SimpleITK-first Python toolkit for medical image analysis. It provides a clean, chainable API for working with scalar images, binary ROIs, multi-label segmentations, vector fields, and 4D time series, making complex workflows simple and reproducible.
 
-# pyable
+---
 
-`pyable` is a SimpleITK-first toolkit for day-to-day medical image work. It wraps scalar images, binary ROIs, multi-label segmentations, vector fields, and 4D time series in chainable Python classes so common tasks stay short and readable.
+## 🚀 Features
 
-## What it gives you
+- Chainable, mutable API around `SimpleITK.Image`
+- Easy NumPy conversion: `(z, y, x)` and legacy `(x, y, z)` layouts
+- ROI- and label-preserving transforms for registration and deformation
+- Segmentation cleanup, overlap metrics, morphometrics
+- Interactive and static plotting for scalar, vector, and time-series data
+- Utilities for deformations, segmentation, metrics, VTK conversion, overlays
 
-- A mutable, chainable API around `SimpleITK.Image`
-- Explicit NumPy conversion helpers for `(z, y, x)` and `(x, y, z)` layouts
-- ROI- and label-preserving transforms for registration/deformation workflows
-- Segmentation cleanup, refinement, overlap metrics, and morphometrics
-- Plotting helpers and interactive viewers for scalar, vector, and time-series data
-- Utility modules for deformations, segmentation, metrics, VTK conversion, and overlays
+---
 
-## Installation
+## 📦 Installation
 
 ```bash
 python -m venv .venv
@@ -23,41 +25,43 @@ source .venv/bin/activate
 pip install git+https://github.com/erosmontin/pyable.git@v3
 ```
 
-Requirements:
+**Requirements:**
 
-- Python `>=3.9`
-- `numpy`
-- `SimpleITK`
-- `matplotlib`
-- `scikit-image`
-- `vtk`
-- `pandas`
-- `pynico`
+- Python >=3.9
+- numpy
+- SimpleITK
+- matplotlib
+- scikit-image
+- vtk
+- pandas
+- pynico
 
-## Quick start
+---
+
+## 🏁 Quick Start
 
 ```python
 from pyable import SITKImaginable, Roiable, LabelMapable
 
-# Scalar image
 img = SITKImaginable("image.nii.gz")
 img.rotateImage(angle=10).changeImageSpacing([1.0, 1.0, 1.0])
 arr = img.getImageAsNumpy()  # (z, y, x)
 
-# Binary ROI
 roi = Roiable("mask.nii.gz")
 roi.fillBinaryHoles().keepBiggestObj().warpROI("deformation.mha")
 metrics = roi.compareTo("reference_mask.nii.gz")
 
-# Multi-label map
 labels = LabelMapable("labels.nii.gz")
 bone = labels.extractLabel(1)
 priors, class_order = labels.buildPriors(tau=0.8)
 ```
 
-## Main classes
 
-| Class | Role |
+---
+
+## 🧩 Main Classes
+
+| Class | Description |
 | --- | --- |
 | `Imaginable` | Base wrapper for scalar `SimpleITK` images |
 | `SITKImaginable` | Thin alias/subclass of `Imaginable` |
@@ -65,20 +69,26 @@ priors, class_order = labels.buildPriors(tau=0.8)
 | `LabelMapable` | Multi-label segmentation workflows |
 | `LabelMapableROI` | Legacy label-map helper built from `Roiable` objects |
 | `Fieldable` | Vector/displacement field image wrapper |
-| `Vectorable` | Explicit vector-field analysis and visualization |
+| `Vectorable` | Vector-field analysis and visualization |
 | `TimeSeriesable` | 4D temporal image workflows |
 | `PlotViewer`, `ScalarPlotter`, `VectorPlotter`, `TimeSeriesPlotter`, `GridPlotter` | Static plotting helpers |
 | `InteractiveViewer`, `OverlayManager` | Interactive browsing and overlay management |
 | `RoiComparison` | Classic ROI overlap/similarity metrics |
 
-## Important behavior
 
-- Most mutating methods return `self`, so chaining is the normal usage pattern.
-- `getImageAsNumpy()` in v3 returns arrays in `(z, y, x)` order. Use `getImageAsNumpyXYZ()` if you need the legacy `(x, y, z)` view.
-- `Roiable` and `LabelMapable` default to nearest-neighbor resampling so labels stay discrete.
-- Geometry-sensitive methods assume images are in the same physical space unless they explicitly resample first.
+---
 
-## Documentation
+## ⚡️ Usage Notes
+
+- Most mutating methods return `self` for easy chaining.
+- `getImageAsNumpy()` returns arrays in `(z, y, x)` order (v3+). Use `getImageAsNumpyXYZ()` for legacy `(x, y, z)`.
+- `Roiable` and `LabelMapable` use nearest-neighbor resampling by default to preserve labels.
+- Geometry-sensitive methods assume images are in the same physical space unless resampled.
+
+
+---
+
+## 📚 Documentation
 
 - [Class and method reference](docs/CLASS_REFERENCE.md)
 - [Deformation workflow](docs/DEFORMATION_WORKFLOW.md)
@@ -87,9 +97,12 @@ priors, class_order = labels.buildPriors(tau=0.8)
 - [Isosurface rendering guide](docs/ISOSURFACE_RENDERING_GUIDE.md)
 - [Vector and time-series guide](docs/VECTOR_AND_TIMESERIES_GUIDE.md)
 
-## Testing
 
-Run the workspace copy of the package, not a globally installed version:
+---
+
+## 🧪 Testing
+
+Run the workspace copy of the package (not a globally installed version):
 
 ```bash
 PYTHONPATH=. pytest -q tests/test_phase2_unit_tests.py
@@ -98,7 +111,10 @@ PYTHONPATH=. pytest -q tests/test_phase5_deformations.py
 PYTHONPATH=. pytest -q tests/test_plotable.py
 ```
 
-## Citation
+
+---
+
+## 📖 Citation
 
 If `pyable` supports your work, please cite:
 
