@@ -1,6 +1,7 @@
 
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19119236.svg)](https://doi.org/10.5281/zenodo.19119236)
-<img src="https://zenodo.org/badge/DOI/10.5281/zenodo.19119236.svg" alt="DOI">
+
+
 # pyable
 
 `pyable` is a SimpleITK-first toolkit for day-to-day medical image work. It wraps scalar images, binary ROIs, multi-label segmentations, vector fields, and 4D time series in chainable Python classes so common tasks stay short and readable.
