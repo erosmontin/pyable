@@ -49,7 +49,7 @@ from . import metrics
 # Backward compatibility alias
 ROIable = Roiable
 
-__version__ = "3"
+__version__ = "3.0.2"
 __author__ = "Eros Montin"
 __all__ = [
     'Imaginable',
@@ -77,4 +77,5 @@ __all__ = [
     'utils',
     'segmentation',
     'metrics',
+    
 ]

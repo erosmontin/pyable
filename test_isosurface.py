@@ -11,11 +11,13 @@ Demonstrates:
 """
 
 import sys
+from pathlib import Path
 import numpy as np
 import SimpleITK as sitk
 
-# Add parent directory to path
-sys.path.insert(0, '/home/erosm/pyable')
+# Ensure repository import
+repo_root = Path(__file__).resolve().parent
+sys.path.insert(0, str(repo_root))
 
 from pyable.imaginable import Imaginable, Roiable, SITKImaginable, Fieldable
 
@@ -103,30 +105,21 @@ def test_continuous_image_isosurface():
         print(f"  Mean value: {img.getMeanValue():.2f}")
         print(f"  Max value: {img.getMaximumValue():.2f}")
         
-        # Test 1a: Render with automatic isosurface value (mean)
-        print("\nTest 1a: Rendering isosurface at mean intensity...")
-        # actor = img.renderIsosurface(show=False)  # Don't show in tests
-        # print("✓ Successfully created isosurface actor (without display)")
-        
-        # Test 1b: Render with custom value
         print("Test 1b: Rendering isosurface at custom value (128)...")
         actor, _, _ = img.renderIsosurface(isosurface_value=128, show=False, color=(1.0, 0.0, 0.0))
-        print(f"✓ Successfully created isosurface actor")
-        print(f"  Actor mapper has {actor.GetMapper().GetInput().GetNumberOfCells()} polygons")
+        assert actor is not None
+        assert actor.GetMapper().GetInput().GetNumberOfCells() > 0
         
-        # Test 1c: Different color and opacity
         print("Test 1c: Rendering with custom color and opacity...")
         actor2, _, _ = img.renderIsosurface(isosurface_value=150, show=False, 
                                              color=(0.0, 1.0, 0.0), opacity=0.8)
-        print(f"✓ Successfully created colored isosurface")
-        
-        return True
-        
+        assert actor2 is not None
+    
     except Exception as e:
         print(f"✗ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        raise
 
 
 def test_roi_isosurface():
@@ -146,25 +139,21 @@ def test_roi_isosurface():
         print(f"  Pixel type: {roi.getImagePixelTypeAsString()[1]}")
         print(f"  Non-zero voxels: {roi.getNumberOfNonZeroVoxels()}")
         
-        # Test 2a: Render ROI at boundary (0.5) - automatic
         print("\nTest 2a: Rendering ROI boundary (automatic value 0.5)...")
         actor, _, _ = roi.renderIsosurface(show=False, color=(0.0, 1.0, 0.0))
-        print(f"✓ Successfully created ROI boundary isosurface")
-        print(f"  Actor mapper has {actor.GetMapper().GetInput().GetNumberOfCells()} polygons")
+        assert actor is not None
+        assert actor.GetMapper().GetInput().GetNumberOfCells() > 0
         
-        # Test 2b: Explicit boundary value
         print("Test 2b: Rendering ROI at explicit boundary...")
         actor2, _, _ = roi.renderIsosurface(isosurface_value=0.5, show=False, 
                                              color=(0.0, 0.0, 1.0), opacity=0.9)
-        print(f"✓ Successfully created ROI isosurface with explicit value")
-        
-        return True
-        
+        assert actor2 is not None
+    
     except Exception as e:
         print(f"✗ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        raise
 
 
 def test_vector_field_magnitude():
@@ -189,25 +178,21 @@ def test_vector_field_magnitude():
         print(f"  Magnitude range: [{stats.GetMinimum():.3f}, {stats.GetMaximum():.3f}]")
         print(f"  Magnitude mean: {stats.GetMean():.3f}")
         
-        # Test 3a: Render magnitude with automatic value
         print("\nTest 3a: Rendering displacement field magnitude...")
         actor, _, _ = vec_field.renderIsosurface(show=False, color=(1.0, 1.0, 0.0))
-        print(f"✓ Successfully created vector field magnitude isosurface")
-        print(f"  Actor mapper has {actor.GetMapper().GetInput().GetNumberOfCells()} polygons")
+        assert actor is not None
+        assert actor.GetMapper().GetInput().GetNumberOfCells() > 0
         
-        # Test 3b: Custom isosurface value
         print("Test 3b: Rendering at custom magnitude value...")
         actor2, _, _ = vec_field.renderIsosurface(isosurface_value=3.0, show=False, 
                                                     color=(0.5, 1.0, 0.5))
-        print(f"✓ Successfully created magnitude isosurface at value 3.0")
-        
-        return True
-        
+        assert actor2 is not None
+    
     except Exception as e:
         print(f"✗ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        raise
 
 
 def test_isosurface_colors():
@@ -235,15 +220,15 @@ def test_isosurface_colors():
                 show=False,
                 color=color
             )
+            assert actor is not None
+            assert actor.GetMapper().GetInput().GetNumberOfCells() > 0
             print(f"✓ {name}: {color} - {actor.GetMapper().GetInput().GetNumberOfCells()} polygons")
-        
-        return True
-        
+    
     except Exception as e:
         print(f"✗ Test failed: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        raise
 
 
 def main():
@@ -255,10 +240,26 @@ def main():
     results = []
     
     # Run tests
-    results.append(("Continuous Image Isosurface", test_continuous_image_isosurface()))
-    results.append(("ROI Boundary Rendering", test_roi_isosurface()))
-    results.append(("Vector Field Magnitude", test_vector_field_magnitude()))
-    results.append(("Color Variations", test_isosurface_colors()))
+    try:
+        test_continuous_image_isosurface()
+        results.append(("Continuous Image Isosurface", True))
+    except Exception:
+        results.append(("Continuous Image Isosurface", False))
+    try:
+        test_roi_isosurface()
+        results.append(("ROI Boundary Rendering", True))
+    except Exception:
+        results.append(("ROI Boundary Rendering", False))
+    try:
+        test_vector_field_magnitude()
+        results.append(("Vector Field Magnitude", True))
+    except Exception:
+        results.append(("Vector Field Magnitude", False))
+    try:
+        test_isosurface_colors()
+        results.append(("Color Variations", True))
+    except Exception:
+        results.append(("Color Variations", False))
     
     # Summary
     print("\n" + "="*60)

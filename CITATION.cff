@@ -1,0 +1,16 @@
+cff-version: 1.2.0
+message: "If you use pyable, please cite the software and the related papers below."
+title: "pyable"
+type: software
+authors:
+  - family-names: "Montin"
+    given-names: "Eros"
+repository-code: "https://github.com/erosmontin/pyable"
+url: "https://github.com/erosmontin/pyable"
+license: "MIT"
+version: "0.1.0"
+date-released: 2026-03-19
+
+# After the first Zenodo release, add the DOI here
+# doi: 10.5281/zenodo.xxxxxxx
+

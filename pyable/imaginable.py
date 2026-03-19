@@ -3875,11 +3875,6 @@ class LabelMapable(Imaginable):
 
         return center_of_all
  
-    
-    def getCenterOfGravityIndex(self):
-        center = self.getIndexFromCoordinates(self.getCenterOfGravityCoordinates())
-        return center
-
     def getCentroidCoordinatesPerLabel(self):
         """
         Get the Centroid of the labelmap per label
@@ -4420,6 +4415,25 @@ class LabelMapable(Imaginable):
             result[lbl] = {k: Roiable(image=v) for k, v in maps.items()}
         return result
 
+    def toRoiable(self, exclude_background=True):
+        """
+        Convert this label map into a list of Roiable objects, one per label.
+
+        Returns
+        -------
+        list[Roiable]
+            List of binary Roiable objects for each label.
+
+        Example
+        -------
+        >>> rois = labelmap.toRoiable()
+        >>> for roi in rois:
+        ...     roi.describe()
+        """
+        rois = []
+        for lbl in self.getLabels(exclude_background=exclude_background):
+            rois.append(self.extractLabel(lbl))
+        return rois
 
 class LabelMapableROI(LabelMapable):
     """Old class for Labelmapable
