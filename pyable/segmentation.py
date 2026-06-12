@@ -5,12 +5,25 @@ Generic functions for refining binary ROI masks using various strategies:
   - Watershed segmentation
   - Confidence-connected region growing
   - Geodesic active contour (level-set) boundary smoothing
+  - Threshold level-set refinement
+  - Laplacian level-set refinement
+  - Shape detection level-set
+  - Chan-Vese (region-based) segmentation
+  - Otsu / multi-Otsu / Li / Yen / Triangle / Huang thresholding
+  - Connected threshold region growing
+  - Neighbourhood connected region growing
+  - Isolated connected region growing
+  - Morphological watershed from markers
+  - N4 bias field correction (preprocessing)
+  - Anisotropic diffusion smoothing (preprocessing)
   - Probability-gated expansion / shrinkage
   - STAPLE multi-segmentation fusion
+  - Distance-constrained clipping
+  - Mask subtraction / intersection
   - Morphological utilities (fill holes, filter components, distance map, shell)
 
 All functions operate on SimpleITK images and return SimpleITK images.
-The corresponding methods on Roiable / LabelMapable are thin wrappers.
+The corresponding methods on Roiable / LabelMapable / Imaginable are thin wrappers.
 
 Example:
     >>> from pyable import Roiable, Imaginable
@@ -815,3 +828,1176 @@ def resolve_label_overlaps(
     for lbl in labels:
         result[lbl] = _arr_to_sitk_binary(arrays[lbl], ref)
     return result
+
+
+# ============================================================================
+# THRESHOLD LEVEL-SET REFINEMENT
+# ============================================================================
+
+def threshold_level_set_refine(
+    roi: sitk.Image,
+    image: sitk.Image,
+    lower_threshold: float = 0.1,
+    upper_threshold: float = 0.9,
+    propagation: float = 1.0,
+    curvature: float = 1.0,
+    iterations: int = 100,
+    rms_tolerance: float = 0.02,
+    allow_shrink: bool = True,
+) -> sitk.Image:
+    """
+    Refine a binary ROI using a threshold-based level-set.
+
+    The contour expands into voxels whose intensity falls within
+    [lower_threshold, upper_threshold] (after normalisation to [0, 1]).
+    This is useful when the target tissue has a well-defined intensity
+    range but irregular boundaries.
+
+    Parameters
+    ----------
+    roi : sitk.Image
+        Binary seed ROI.
+    image : sitk.Image
+        Scalar intensity image.
+    lower_threshold : float
+        Lower intensity bound (normalised [0, 1]).
+    upper_threshold : float
+        Upper intensity bound (normalised [0, 1]).
+    propagation : float
+        Balloon force.
+    curvature : float
+        Smoothing force.
+    iterations : int
+        Maximum iterations.
+    rms_tolerance : float
+        Convergence threshold.
+    allow_shrink : bool
+        If False, result is unioned with the seed.
+
+    Returns
+    -------
+    sitk.Image
+        Refined binary ROI (UInt8).
+    """
+    image = _ensure_same_grid(image, roi, sitk.sitkLinear)
+    seed = sitk.Cast(roi > 0, sitk.sitkUInt8)
+
+    stats = sitk.StatisticsImageFilter()
+    stats.Execute(seed)
+    if stats.GetSum() == 0:
+        return seed
+
+    # Normalise image intensity to [0, 1]
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    mmf = sitk.MinimumMaximumImageFilter()
+    mmf.Execute(img_f)
+    lo, hi = mmf.GetMinimum(), mmf.GetMaximum()
+    if hi - lo > 0:
+        img_norm = (img_f - lo) / (hi - lo)
+    else:
+        img_norm = img_f
+
+    # Signed distance initialisation
+    dist = sitk.SignedMaurerDistanceMap(
+        seed, insideIsPositive=True, squaredDistance=False, useImageSpacing=True,
+    )
+
+    try:
+        tls = sitk.ThresholdSegmentationLevelSetImageFilter()
+        tls.SetLowerThreshold(lower_threshold)
+        tls.SetUpperThreshold(upper_threshold)
+        tls.SetPropagationScaling(propagation)
+        tls.SetCurvatureScaling(curvature)
+        tls.SetMaximumRMSError(rms_tolerance)
+        tls.SetNumberOfIterations(iterations)
+
+        ls_out = tls.Execute(
+            sitk.Cast(dist, sitk.sitkFloat32),
+            sitk.Cast(img_norm, sitk.sitkFloat32),
+        )
+
+        refined = sitk.BinaryThreshold(ls_out, 0, 1e10, 1, 0)
+        refined = sitk.Cast(refined, sitk.sitkUInt8)
+
+        if not allow_shrink:
+            refined = sitk.Or(refined, seed)
+
+        return refined
+    except Exception:
+        return seed
+
+
+# ============================================================================
+# LAPLACIAN LEVEL-SET REFINEMENT
+# ============================================================================
+
+def laplacian_level_set_refine(
+    roi: sitk.Image,
+    image: sitk.Image,
+    propagation: float = 1.0,
+    curvature: float = 1.0,
+    iterations: int = 100,
+    rms_tolerance: float = 0.02,
+    allow_shrink: bool = True,
+) -> sitk.Image:
+    """
+    Refine a binary ROI using a Laplacian-based level-set.
+
+    The speed function is the Laplacian of the image, which drives
+    the contour towards intensity edges (zero-crossings).
+
+    Parameters
+    ----------
+    roi : sitk.Image
+        Binary seed ROI.
+    image : sitk.Image
+        Scalar intensity image.
+    propagation : float
+        Balloon force.
+    curvature : float
+        Smoothing force.
+    iterations : int
+        Maximum iterations.
+    rms_tolerance : float
+        Convergence threshold.
+    allow_shrink : bool
+        If False, result is unioned with the seed.
+
+    Returns
+    -------
+    sitk.Image
+        Refined binary ROI (UInt8).
+    """
+    image = _ensure_same_grid(image, roi, sitk.sitkLinear)
+    seed = sitk.Cast(roi > 0, sitk.sitkUInt8)
+
+    stats = sitk.StatisticsImageFilter()
+    stats.Execute(seed)
+    if stats.GetSum() == 0:
+        return seed
+
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    dist = sitk.SignedMaurerDistanceMap(
+        seed, insideIsPositive=True, squaredDistance=False, useImageSpacing=True,
+    )
+
+    try:
+        lls = sitk.LaplacianSegmentationLevelSetImageFilter()
+        lls.SetPropagationScaling(propagation)
+        lls.SetCurvatureScaling(curvature)
+        lls.SetMaximumRMSError(rms_tolerance)
+        lls.SetNumberOfIterations(iterations)
+
+        ls_out = lls.Execute(
+            sitk.Cast(dist, sitk.sitkFloat32),
+            sitk.Cast(img_f, sitk.sitkFloat32),
+        )
+
+        refined = sitk.BinaryThreshold(ls_out, 0, 1e10, 1, 0)
+        refined = sitk.Cast(refined, sitk.sitkUInt8)
+
+        if not allow_shrink:
+            refined = sitk.Or(refined, seed)
+
+        return refined
+    except Exception:
+        return seed
+
+
+# ============================================================================
+# SHAPE DETECTION LEVEL-SET
+# ============================================================================
+
+def shape_detection_level_set_refine(
+    roi: sitk.Image,
+    image: sitk.Image,
+    propagation: float = 1.0,
+    curvature: float = 0.5,
+    iterations: int = 100,
+    rms_tolerance: float = 0.02,
+    sigma_mm: float = 1.0,
+    allow_shrink: bool = True,
+) -> sitk.Image:
+    """
+    Refine ROI using a shape detection level-set.
+
+    Similar to geodesic active contour but without advection.
+    The speed is derived from the edge potential of the image.
+
+    Parameters
+    ----------
+    roi : sitk.Image
+        Binary seed ROI.
+    image : sitk.Image
+        Scalar intensity image.
+    propagation : float
+        Balloon force.
+    curvature : float
+        Smoothing force.
+    iterations : int
+        Maximum iterations.
+    rms_tolerance : float
+        Convergence threshold.
+    sigma_mm : float
+        Gaussian sigma for edge computation.
+    allow_shrink : bool
+        If False, result is unioned with the seed.
+
+    Returns
+    -------
+    sitk.Image
+        Refined binary ROI (UInt8).
+    """
+    image = _ensure_same_grid(image, roi, sitk.sitkLinear)
+    seed = sitk.Cast(roi > 0, sitk.sitkUInt8)
+
+    stats = sitk.StatisticsImageFilter()
+    stats.Execute(seed)
+    if stats.GetSum() == 0:
+        return seed
+
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    dist = sitk.SignedMaurerDistanceMap(
+        seed, insideIsPositive=True, squaredDistance=False, useImageSpacing=True,
+    )
+
+    # Edge potential (speed image)
+    grad_mag = sitk.GradientMagnitudeRecursiveGaussian(img_f, sigma=sigma_mm)
+    speed = sitk.BoundedReciprocal(grad_mag)
+
+    try:
+        sdls = sitk.ShapeDetectionLevelSetImageFilter()
+        sdls.SetPropagationScaling(propagation)
+        sdls.SetCurvatureScaling(curvature)
+        sdls.SetMaximumRMSError(rms_tolerance)
+        sdls.SetNumberOfIterations(iterations)
+
+        ls_out = sdls.Execute(
+            sitk.Cast(dist, sitk.sitkFloat32),
+            sitk.Cast(speed, sitk.sitkFloat32),
+        )
+
+        refined = sitk.BinaryThreshold(ls_out, 0, 1e10, 1, 0)
+        refined = sitk.Cast(refined, sitk.sitkUInt8)
+
+        if not allow_shrink:
+            refined = sitk.Or(refined, seed)
+
+        return refined
+    except Exception:
+        return seed
+
+
+# ============================================================================
+# CHAN-VESE (REGION-BASED) SEGMENTATION
+# ============================================================================
+
+def chan_vese_refine(
+    roi: sitk.Image,
+    image: sitk.Image,
+    lambda1: float = 1.0,
+    lambda2: float = 1.0,
+    curvature_weight: float = 0.0,
+    area_weight: float = 0.0,
+    volume_weight: float = 0.0,
+    iterations: int = 100,
+    rms_tolerance: float = 0.02,
+    allow_shrink: bool = True,
+) -> sitk.Image:
+    """
+    Refine a binary ROI using the Chan-Vese (region-based) level-set.
+
+    This method does not rely on edge information and works well for
+    images with weak or absent edges.  It separates the image into
+    foreground and background based on intensity homogeneity.
+
+    Parameters
+    ----------
+    roi : sitk.Image
+        Binary seed ROI.
+    image : sitk.Image
+        Scalar intensity image.
+    lambda1 : float
+        Weight for inside-region variance penalty.
+    lambda2 : float
+        Weight for outside-region variance penalty.
+    curvature_weight : float
+        Curvature regularisation.
+    area_weight : float
+        Area penalty weight.
+    volume_weight : float
+        Volume penalty weight.
+    iterations : int
+        Maximum iterations.
+    rms_tolerance : float
+        Convergence threshold.
+    allow_shrink : bool
+        If False, result is unioned with the seed.
+
+    Returns
+    -------
+    sitk.Image
+        Refined binary ROI (UInt8).
+    """
+    image = _ensure_same_grid(image, roi, sitk.sitkLinear)
+    seed = sitk.Cast(roi > 0, sitk.sitkUInt8)
+
+    stats = sitk.StatisticsImageFilter()
+    stats.Execute(seed)
+    if stats.GetSum() == 0:
+        return seed
+
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+
+    try:
+        cv = sitk.ScalarChanAndVeseDenseLevelSetImageFilter()
+        cv.SetLambda1(lambda1)
+        cv.SetLambda2(lambda2)
+        cv.SetCurvatureWeight(curvature_weight)
+        cv.SetAreaWeight(area_weight)
+        cv.SetVolumeWeight(volume_weight)
+        cv.SetMaximumRMSError(rms_tolerance)
+        cv.SetNumberOfIterations(iterations)
+
+        dist = sitk.SignedMaurerDistanceMap(
+            seed, insideIsPositive=True, squaredDistance=False, useImageSpacing=True,
+        )
+
+        ls_out = cv.Execute(
+            sitk.Cast(dist, sitk.sitkFloat32),
+            sitk.Cast(img_f, sitk.sitkFloat32),
+        )
+
+        refined = sitk.BinaryThreshold(ls_out, 0, 1e10, 1, 0)
+        refined = sitk.Cast(refined, sitk.sitkUInt8)
+
+        if not allow_shrink:
+            refined = sitk.Or(refined, seed)
+
+        return refined
+    except Exception:
+        return seed
+
+
+# ============================================================================
+# THRESHOLDING METHODS (Otsu, Multi-Otsu, Li, Yen, Triangle, Huang)
+# ============================================================================
+
+def otsu_threshold(image: sitk.Image, n_bins: int = 128) -> sitk.Image:
+    """
+    Segment an image using Otsu's automatic threshold.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    n_bins : int
+        Number of histogram bins for threshold computation.
+
+    Returns
+    -------
+    sitk.Image
+        Binary segmentation (UInt8).
+    """
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    filt = sitk.OtsuThresholdImageFilter()
+    filt.SetInsideValue(0)
+    filt.SetOutsideValue(1)
+    filt.SetNumberOfHistogramBins(n_bins)
+    return sitk.Cast(filt.Execute(img_f), sitk.sitkUInt8)
+
+
+def multi_otsu_threshold(
+    image: sitk.Image,
+    n_thresholds: int = 2,
+    n_bins: int = 256,
+) -> sitk.Image:
+    """
+    Segment an image using multi-level Otsu thresholding.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    n_thresholds : int
+        Number of thresholds (produces n_thresholds + 1 classes).
+    n_bins : int
+        Number of histogram bins.
+
+    Returns
+    -------
+    sitk.Image
+        Multi-label segmentation (UInt8).
+    """
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    filt = sitk.OtsuMultipleThresholdsImageFilter()
+    filt.SetNumberOfThresholds(n_thresholds)
+    filt.SetNumberOfHistogramBins(n_bins)
+    return sitk.Cast(filt.Execute(img_f), sitk.sitkUInt8)
+
+
+def li_threshold(image: sitk.Image, n_bins: int = 128) -> sitk.Image:
+    """
+    Segment an image using Li's iterative minimum cross-entropy threshold.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    n_bins : int
+        Number of histogram bins for threshold computation.
+
+    Returns
+    -------
+    sitk.Image
+        Binary segmentation (UInt8).
+    """
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    filt = sitk.LiThresholdImageFilter()
+    filt.SetInsideValue(0)
+    filt.SetOutsideValue(1)
+    filt.SetNumberOfHistogramBins(n_bins)
+    return sitk.Cast(filt.Execute(img_f), sitk.sitkUInt8)
+
+
+def yen_threshold(image: sitk.Image, n_bins: int = 128) -> sitk.Image:
+    """
+    Segment an image using Yen's entropy-based threshold.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    n_bins : int
+        Number of histogram bins for threshold computation.
+
+    Returns
+    -------
+    sitk.Image
+        Binary segmentation (UInt8).
+    """
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    filt = sitk.YenThresholdImageFilter()
+    filt.SetInsideValue(0)
+    filt.SetOutsideValue(1)
+    filt.SetNumberOfHistogramBins(n_bins)
+    return sitk.Cast(filt.Execute(img_f), sitk.sitkUInt8)
+
+
+def triangle_threshold(image: sitk.Image, n_bins: int = 128) -> sitk.Image:
+    """
+    Segment an image using the triangle (Zack) threshold method.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    n_bins : int
+        Number of histogram bins for threshold computation.
+
+    Returns
+    -------
+    sitk.Image
+        Binary segmentation (UInt8).
+    """
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    filt = sitk.TriangleThresholdImageFilter()
+    filt.SetInsideValue(0)
+    filt.SetOutsideValue(1)
+    filt.SetNumberOfHistogramBins(n_bins)
+    return sitk.Cast(filt.Execute(img_f), sitk.sitkUInt8)
+
+
+def huang_threshold(image: sitk.Image, n_bins: int = 128) -> sitk.Image:
+    """
+    Segment an image using Huang's fuzzy threshold method.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    n_bins : int
+        Number of histogram bins for threshold computation.
+
+    Returns
+    -------
+    sitk.Image
+        Binary segmentation (UInt8).
+    """
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    filt = sitk.HuangThresholdImageFilter()
+    filt.SetInsideValue(0)
+    filt.SetOutsideValue(1)
+    filt.SetNumberOfHistogramBins(n_bins)
+    return sitk.Cast(filt.Execute(img_f), sitk.sitkUInt8)
+
+
+def manual_threshold(
+    image: sitk.Image,
+    lower: float = 0.0,
+    upper: float = 1.0,
+) -> sitk.Image:
+    """
+    Segment an image by applying a manual intensity threshold.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    lower : float
+        Lower intensity bound (inclusive).
+    upper : float
+        Upper intensity bound (inclusive).
+
+    Returns
+    -------
+    sitk.Image
+        Binary segmentation (UInt8).
+    """
+    return sitk.Cast(
+        sitk.BinaryThreshold(sitk.Cast(image, sitk.sitkFloat32), lower, upper, 1, 0),
+        sitk.sitkUInt8,
+    )
+
+
+# ============================================================================
+# CONNECTED THRESHOLD REGION GROWING
+# ============================================================================
+
+def connected_threshold_grow(
+    image: sitk.Image,
+    seed_roi: sitk.Image,
+    lower: float = None,
+    upper: float = None,
+    n_seeds: int = 200,
+    replace_value: int = 1,
+    face_connected: bool = True,
+) -> sitk.Image:
+    """
+    Region growing from seed points with explicit intensity bounds.
+
+    Seeds are sampled from the seed ROI.  Unlike confidence-connected,
+    the intensity bounds are specified directly.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    seed_roi : sitk.Image
+        Binary seed ROI — points are sampled from its interior.
+    lower : float, optional
+        Lower intensity bound.  If None, computed as mean - 2*std of
+        intensities inside the seed ROI.
+    upper : float, optional
+        Upper intensity bound.  If None, computed as mean + 2*std.
+    n_seeds : int
+        Maximum number of seed points.
+    replace_value : int
+        Value for the grown region.
+    face_connected : bool
+        If True, use 6-connectivity (face). If False, use 26-connectivity
+        (full) which allows diagonal growth.
+
+    Returns
+    -------
+    sitk.Image
+        Binary segmentation (UInt8).
+    """
+    image = _ensure_same_grid(image, seed_roi, sitk.sitkLinear)
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    roi_arr = sitk.GetArrayFromImage(seed_roi) > 0
+
+    seed_indices = np.argwhere(roi_arr)
+    if len(seed_indices) == 0:
+        return sitk.Cast(seed_roi, sitk.sitkUInt8)
+
+    # Auto-compute bounds from seed region
+    if lower is None or upper is None:
+        img_arr = sitk.GetArrayFromImage(img_f)
+        vals = img_arr[roi_arr]
+        mean_v, std_v = float(vals.mean()), float(vals.std())
+        if lower is None:
+            lower = mean_v - 2.0 * std_v
+        if upper is None:
+            upper = mean_v + 2.0 * std_v
+
+    # Sub-sample seeds
+    if len(seed_indices) > n_seeds:
+        idx = np.linspace(0, len(seed_indices) - 1, n_seeds, dtype=int)
+        seed_indices = seed_indices[idx]
+
+    seeds = [tuple(int(v) for v in reversed(s)) for s in seed_indices]
+
+    ct = sitk.ConnectedThresholdImageFilter()
+    ct.SetLower(float(lower))
+    ct.SetUpper(float(upper))
+    ct.SetReplaceValue(replace_value)
+    if face_connected:
+        ct.SetConnectivity(0)  # Face connectivity (6-connected)
+    else:
+        ct.SetConnectivity(1)  # Full connectivity (26-connected)
+    for s in seeds:
+        ct.AddSeed(s)
+
+    result = ct.Execute(img_f)
+    return sitk.Cast(result, sitk.sitkUInt8)
+
+
+# ============================================================================
+# NEIGHBOURHOOD CONNECTED REGION GROWING
+# ============================================================================
+
+def neighbourhood_connected_grow(
+    image: sitk.Image,
+    seed_roi: sitk.Image,
+    lower: float = None,
+    upper: float = None,
+    radius: int = 1,
+    n_seeds: int = 200,
+) -> sitk.Image:
+    """
+    Region growing with neighbourhood connectivity constraint.
+
+    Similar to connected threshold but also checks the neighbourhood
+    of each candidate voxel.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    seed_roi : sitk.Image
+        Binary seed ROI.
+    lower : float, optional
+        Lower intensity bound (auto-computed if None).
+    upper : float, optional
+        Upper intensity bound (auto-computed if None).
+    radius : int
+        Neighbourhood radius.
+    n_seeds : int
+        Maximum number of seed points.
+
+    Returns
+    -------
+    sitk.Image
+        Binary segmentation (UInt8).
+    """
+    image = _ensure_same_grid(image, seed_roi, sitk.sitkLinear)
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    roi_arr = sitk.GetArrayFromImage(seed_roi) > 0
+
+    seed_indices = np.argwhere(roi_arr)
+    if len(seed_indices) == 0:
+        return sitk.Cast(seed_roi, sitk.sitkUInt8)
+
+    if lower is None or upper is None:
+        img_arr = sitk.GetArrayFromImage(img_f)
+        vals = img_arr[roi_arr]
+        mean_v, std_v = float(vals.mean()), float(vals.std())
+        if lower is None:
+            lower = mean_v - 2.0 * std_v
+        if upper is None:
+            upper = mean_v + 2.0 * std_v
+
+    if len(seed_indices) > n_seeds:
+        idx = np.linspace(0, len(seed_indices) - 1, n_seeds, dtype=int)
+        seed_indices = seed_indices[idx]
+
+    seeds = [tuple(int(v) for v in reversed(s)) for s in seed_indices]
+
+    nc = sitk.NeighborhoodConnectedImageFilter()
+    nc.SetLower(float(lower))
+    nc.SetUpper(float(upper))
+    nc.SetRadius([radius] * 3)
+    for s in seeds:
+        nc.AddSeed(s)
+
+    result = nc.Execute(img_f)
+    return sitk.Cast(result, sitk.sitkUInt8)
+
+
+# ============================================================================
+# ISOLATED CONNECTED REGION GROWING
+# ============================================================================
+
+def isolated_connected_grow(
+    image: sitk.Image,
+    seed1_roi: sitk.Image,
+    seed2_roi: sitk.Image,
+    n_seeds: int = 50,
+) -> sitk.Image:
+    """
+    Find the intensity threshold that separates two seed regions.
+
+    Grows from seed1 while staying disconnected from seed2.
+    Useful for separating two adjacent structures.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    seed1_roi : sitk.Image
+        Binary ROI for the target region.
+    seed2_roi : sitk.Image
+        Binary ROI for the excluded region.
+    n_seeds : int
+        Maximum seeds per region.
+
+    Returns
+    -------
+    sitk.Image
+        Binary segmentation of seed1 region (UInt8).
+    """
+    image = _ensure_same_grid(image, seed1_roi, sitk.sitkLinear)
+    seed2_roi = _ensure_same_grid(seed2_roi, seed1_roi, sitk.sitkNearestNeighbor)
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+
+    def _sample_seeds(roi_img, max_n):
+        arr = sitk.GetArrayFromImage(roi_img) > 0
+        struct = np.ones((3, 3, 3), dtype=bool)
+        eroded = binary_erosion(arr, structure=struct, iterations=1)
+        if not np.any(eroded):
+            eroded = arr
+        indices = np.argwhere(eroded)
+        if len(indices) > max_n:
+            idx = np.linspace(0, len(indices) - 1, max_n, dtype=int)
+            indices = indices[idx]
+        return [tuple(int(v) for v in reversed(s)) for s in indices]
+
+    seeds1 = _sample_seeds(seed1_roi, n_seeds)
+    seeds2 = _sample_seeds(seed2_roi, n_seeds)
+
+    if not seeds1 or not seeds2:
+        return sitk.Cast(seed1_roi > 0, sitk.sitkUInt8)
+
+    ic = sitk.IsolatedConnectedImageFilter()
+    ic.SetSeed1(seeds1[0])
+    ic.SetSeed2(seeds2[0])
+
+    result = ic.Execute(img_f)
+    return sitk.Cast(result, sitk.sitkUInt8)
+
+
+# ============================================================================
+# MORPHOLOGICAL WATERSHED FROM MARKERS
+# ============================================================================
+
+def morphological_watershed(
+    image: sitk.Image,
+    level: float = 0.1,
+    fully_connected: bool = False,
+) -> sitk.Image:
+    """
+    Apply morphological watershed segmentation (no markers).
+
+    Produces a label image of watershed basins from the gradient of
+    the input image.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    level : float
+        Flooding level — higher values produce fewer basins (more merged).
+    fully_connected : bool
+        Use 26-connectivity (True) vs 6-connectivity (False).
+
+    Returns
+    -------
+    sitk.Image
+        Label image of watershed basins (UInt16).
+    """
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    grad = sitk.GradientMagnitudeRecursiveGaussian(img_f, sigma=1.0)
+
+    ws = sitk.MorphologicalWatershedImageFilter()
+    ws.SetLevel(level)
+    ws.SetFullyConnected(fully_connected)
+    ws.SetMarkWatershedLine(False)
+
+    return sitk.Cast(ws.Execute(grad), sitk.sitkUInt16)
+
+
+def morphological_watershed_from_markers(
+    image: sitk.Image,
+    markers: sitk.Image,
+    fully_connected: bool = False,
+) -> sitk.Image:
+    """
+    Watershed segmentation driven by user-provided markers.
+
+    Each connected marker region becomes a separate basin.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image (gradient is computed internally).
+    markers : sitk.Image
+        Integer marker image (each label seeds a basin; 0 = unlabelled).
+    fully_connected : bool
+        Use 26-connectivity (True) vs 6-connectivity (False).
+
+    Returns
+    -------
+    sitk.Image
+        Label image of watershed basins (UInt16).
+    """
+    image = _ensure_same_grid(image, markers, sitk.sitkLinear)
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    grad = sitk.GradientMagnitudeRecursiveGaussian(img_f, sigma=1.0)
+
+    ws = sitk.MorphologicalWatershedFromMarkersImageFilter()
+    ws.SetFullyConnected(fully_connected)
+    ws.SetMarkWatershedLine(False)
+
+    return sitk.Cast(
+        ws.Execute(grad, sitk.Cast(markers, sitk.sitkUInt32)),
+        sitk.sitkUInt16,
+    )
+
+
+# ============================================================================
+# DISTANCE-CONSTRAINED CLIPPING
+# ============================================================================
+
+def constrain_by_distance(
+    roi: sitk.Image,
+    reference_roi: sitk.Image,
+    max_distance_mm: float = 5.0,
+    exclude_interior: bool = False,
+) -> sitk.Image:
+    """
+    Clip a ROI to stay within a maximum distance from a reference ROI.
+
+    Useful for constraining cartilage near bone, or limiting leakage.
+
+    Parameters
+    ----------
+    roi : sitk.Image
+        Binary ROI to constrain.
+    reference_roi : sitk.Image
+        Binary reference ROI.
+    max_distance_mm : float
+        Maximum allowed distance from the reference surface.
+    exclude_interior : bool
+        If True, also remove voxels inside the reference ROI
+        (e.g., cartilage should not overlap bone).
+
+    Returns
+    -------
+    sitk.Image
+        Constrained binary ROI (UInt8).
+    """
+    reference_roi = _ensure_same_grid(reference_roi, roi, sitk.sitkNearestNeighbor)
+    roi_arr = sitk.GetArrayFromImage(roi) > 0
+    ref_arr = sitk.GetArrayFromImage(reference_roi) > 0
+    spacing = _spacing_zyx(roi)
+
+    dist = distance_transform_edt(~ref_arr, sampling=spacing)
+    valid = dist <= max_distance_mm
+
+    if exclude_interior:
+        valid = valid & (~ref_arr)
+
+    result = roi_arr & valid
+    return _arr_to_sitk_binary(result, roi)
+
+
+# ============================================================================
+# MASK SUBTRACTION / INTERSECTION
+# ============================================================================
+
+def subtract_mask(
+    roi: sitk.Image,
+    mask_to_remove: sitk.Image,
+) -> sitk.Image:
+    """
+    Remove voxels from roi that overlap with mask_to_remove.
+
+    Parameters
+    ----------
+    roi : sitk.Image
+        Binary ROI.
+    mask_to_remove : sitk.Image
+        Binary mask of voxels to remove.
+
+    Returns
+    -------
+    sitk.Image
+        ROI with overlapping voxels removed (UInt8).
+    """
+    mask_to_remove = _ensure_same_grid(mask_to_remove, roi, sitk.sitkNearestNeighbor)
+    roi_arr = sitk.GetArrayFromImage(roi) > 0
+    mask_arr = sitk.GetArrayFromImage(mask_to_remove) > 0
+    result = roi_arr & (~mask_arr)
+    return _arr_to_sitk_binary(result, roi)
+
+
+def intersect_masks(
+    roi: sitk.Image,
+    other: sitk.Image,
+) -> sitk.Image:
+    """
+    Keep only voxels present in both ROIs.
+
+    Parameters
+    ----------
+    roi : sitk.Image
+        First binary ROI.
+    other : sitk.Image
+        Second binary ROI.
+
+    Returns
+    -------
+    sitk.Image
+        Intersection of the two ROIs (UInt8).
+    """
+    other = _ensure_same_grid(other, roi, sitk.sitkNearestNeighbor)
+    roi_arr = sitk.GetArrayFromImage(roi) > 0
+    other_arr = sitk.GetArrayFromImage(other) > 0
+    result = roi_arr & other_arr
+    return _arr_to_sitk_binary(result, roi)
+
+
+def union_masks(
+    roi: sitk.Image,
+    other: sitk.Image,
+) -> sitk.Image:
+    """
+    Combine two binary ROIs (logical OR).
+
+    Parameters
+    ----------
+    roi : sitk.Image
+        First binary ROI.
+    other : sitk.Image
+        Second binary ROI.
+
+    Returns
+    -------
+    sitk.Image
+        Union of the two ROIs (UInt8).
+    """
+    other = _ensure_same_grid(other, roi, sitk.sitkNearestNeighbor)
+    roi_arr = sitk.GetArrayFromImage(roi) > 0
+    other_arr = sitk.GetArrayFromImage(other) > 0
+    result = roi_arr | other_arr
+    return _arr_to_sitk_binary(result, roi)
+
+
+# ============================================================================
+# PREPROCESSING: N4 BIAS FIELD CORRECTION
+# ============================================================================
+
+def n4_bias_field_correction(
+    image: sitk.Image,
+    mask: sitk.Image = None,
+    shrink_factor: int = 4,
+    n_iterations: list = None,
+    convergence_threshold: float = 0.001,
+    spline_order: int = 3,
+) -> sitk.Image:
+    """
+    Apply N4 bias field correction to an intensity image.
+
+    Corrects for low-frequency intensity non-uniformity (e.g., from RF
+    coil inhomogeneity in MRI).
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    mask : sitk.Image, optional
+        Binary mask defining the region to use for bias estimation.
+        If None, Otsu thresholding is used.
+    shrink_factor : int
+        Downsample factor for speed (default 4).
+    n_iterations : list, optional
+        Iterations per fitting level. Length controls number of fitting
+        levels (default [50, 50, 50, 50] = 4 levels).
+    convergence_threshold : float
+        Convergence threshold.
+    spline_order : int
+        Order of the B-spline used for bias field estimation (default 3).
+
+    Returns
+    -------
+    sitk.Image
+        Bias-corrected image (Float32).
+    """
+    if n_iterations is None:
+        n_iterations = [50, 50, 50, 50]
+
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+
+    if mask is None:
+        mask = sitk.OtsuThreshold(img_f, 0, 1, 200)
+    else:
+        mask = _ensure_same_grid(mask, image, sitk.sitkNearestNeighbor)
+        mask = sitk.Cast(mask > 0, sitk.sitkUInt8)
+
+    # Shrink for speed
+    shrunk_img = sitk.Shrink(img_f, [shrink_factor] * img_f.GetDimension())
+    shrunk_mask = sitk.Shrink(mask, [shrink_factor] * mask.GetDimension())
+
+    corrector = sitk.N4BiasFieldCorrectionImageFilter()
+    corrector.SetMaximumNumberOfIterations(n_iterations)
+    corrector.SetConvergenceThreshold(convergence_threshold)
+    corrector.SetSplineOrder(spline_order)
+
+    corrected_shrunk = corrector.Execute(shrunk_img, shrunk_mask)
+
+    # Get log bias field and resample to full resolution
+    log_bias = corrector.GetLogBiasFieldAsImage(img_f)
+    corrected = img_f / sitk.Exp(log_bias)
+
+    return corrected
+
+
+# ============================================================================
+# PREPROCESSING: ANISOTROPIC DIFFUSION SMOOTHING
+# ============================================================================
+
+def anisotropic_diffusion(
+    image: sitk.Image,
+    iterations: int = 5,
+    time_step: float = 0.0625,
+    conductance: float = 3.0,
+) -> sitk.Image:
+    """
+    Apply curvature anisotropic diffusion smoothing.
+
+    Smooths the image while preserving edges, useful as a preprocessing
+    step before segmentation.
+
+    Parameters
+    ----------
+    image : sitk.Image
+        Scalar intensity image.
+    iterations : int
+        Number of diffusion iterations.
+    time_step : float
+        Time step per iteration (stability requires small values).
+    conductance : float
+        Conductance parameter — higher values smooth more aggressively
+        across edges.
+
+    Returns
+    -------
+    sitk.Image
+        Smoothed image (Float32).
+    """
+    img_f = sitk.Cast(image, sitk.sitkFloat32)
+    return sitk.CurvatureAnisotropicDiffusion(
+        img_f,
+        timeStep=time_step,
+        conductanceParameter=conductance,
+        numberOfIterations=iterations,
+    )
+
+
+# ============================================================================
+# BINARY MORPHOLOGICAL OPERATIONS
+# ============================================================================
+
+def binary_erode(
+    roi: sitk.Image,
+    radius_mm: float = 1.0,
+) -> sitk.Image:
+    """
+    Erode a binary ROI by a radius specified in mm.
+
+    Parameters
+    ----------
+    roi : sitk.Image
+        Binary ROI.
+    radius_mm : float
+        Erosion radius in mm.
+
+    Returns
+    -------
+    sitk.Image
+        Eroded binary ROI (UInt8).
+    """
+    spacing = _spacing_zyx(roi)
+    radius_voxels = [max(1, int(round(radius_mm / s))) for s in reversed(spacing)]
+    binary = sitk.Cast(roi > 0, sitk.sitkUInt8)
+    return sitk.BinaryErode(binary, radius_voxels)
+
+
+def binary_dilate(
+    roi: sitk.Image,
+    radius_mm: float = 1.0,
+) -> sitk.Image:
+    """
+    Dilate a binary ROI by a radius specified in mm.
+
+    Parameters
+    ----------
+    roi : sitk.Image
+        Binary ROI.
+    radius_mm : float
+        Dilation radius in mm.
+
+    Returns
+    -------
+    sitk.Image
+        Dilated binary ROI (UInt8).
+    """
+    spacing = _spacing_zyx(roi)
+    radius_voxels = [max(1, int(round(radius_mm / s))) for s in reversed(spacing)]
+    binary = sitk.Cast(roi > 0, sitk.sitkUInt8)
+    return sitk.BinaryDilate(binary, radius_voxels)
+
+
+def binary_open(
+    roi: sitk.Image,
+    radius_mm: float = 1.0,
+) -> sitk.Image:
+    """
+    Morphological opening (erosion followed by dilation) in mm.
+
+    Removes small protrusions and disconnected fragments.
+
+    Parameters
+    ----------
+    roi : sitk.Image
+        Binary ROI.
+    radius_mm : float
+        Structuring element radius in mm.
+
+    Returns
+    -------
+    sitk.Image
+        Opened binary ROI (UInt8).
+    """
+    spacing = _spacing_zyx(roi)
+    radius_voxels = [max(1, int(round(radius_mm / s))) for s in reversed(spacing)]
+    binary = sitk.Cast(roi > 0, sitk.sitkUInt8)
+    return sitk.BinaryMorphologicalOpening(binary, radius_voxels)
+
+
+def binary_close(
+    roi: sitk.Image,
+    radius_mm: float = 1.0,
+) -> sitk.Image:
+    """
+    Morphological closing (dilation followed by erosion) in mm.
+
+    Fills small holes and gaps in boundaries.
+
+    Parameters
+    ----------
+    roi : sitk.Image
+        Binary ROI.
+    radius_mm : float
+        Structuring element radius in mm.
+
+    Returns
+    -------
+    sitk.Image
+        Closed binary ROI (UInt8).
+    """
+    spacing = _spacing_zyx(roi)
+    radius_voxels = [max(1, int(round(radius_mm / s))) for s in reversed(spacing)]
+    binary = sitk.Cast(roi > 0, sitk.sitkUInt8)
+    return sitk.BinaryMorphologicalClosing(binary, radius_voxels)

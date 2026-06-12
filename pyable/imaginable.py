@@ -2908,10 +2908,382 @@ class Imaginable:
         
         return actor
 
-    
-    
-    
-    
+    # ========================================================================
+    # SEGMENTATION: THRESHOLDING (on Imaginable)
+    # ========================================================================
+
+    def segmentOtsu(self, n_bins=128):
+        """
+        Segment using Otsu's automatic threshold.
+
+        Parameters
+        ----------
+        n_bins : int
+            Number of histogram bins for threshold computation.
+
+        Returns
+        -------
+        Roiable
+            Binary segmentation as a new Roiable.
+
+        Example
+        -------
+        >>> roi = img.segmentOtsu()
+        """
+        from . import segmentation as seg
+        result = seg.otsu_threshold(self.getImage(), n_bins=n_bins)
+        r = Roiable()
+        r.setImage(result, 'segmented via Otsu threshold')
+        return r
+
+    def segmentMultiOtsu(self, n_thresholds=2, n_bins=256):
+        """
+        Segment using multi-level Otsu thresholding.
+
+        Parameters
+        ----------
+        n_thresholds : int
+            Number of thresholds (produces n_thresholds + 1 classes).
+        n_bins : int
+            Number of histogram bins.
+
+        Returns
+        -------
+        LabelMapable
+            Multi-label segmentation.
+        """
+        from . import segmentation as seg
+        result = seg.multi_otsu_threshold(self.getImage(), n_thresholds, n_bins)
+        lm = LabelMapable()
+        lm.setImage(result, f'segmented via multi-Otsu ({n_thresholds} thresholds)')
+        return lm
+
+    def segmentLi(self, n_bins=128):
+        """
+        Segment using Li's minimum cross-entropy threshold.
+
+        Parameters
+        ----------
+        n_bins : int
+            Number of histogram bins for threshold computation.
+
+        Returns
+        -------
+        Roiable
+            Binary segmentation.
+        """
+        from . import segmentation as seg
+        result = seg.li_threshold(self.getImage(), n_bins=n_bins)
+        r = Roiable()
+        r.setImage(result, 'segmented via Li threshold')
+        return r
+
+    def segmentYen(self, n_bins=128):
+        """
+        Segment using Yen's entropy-based threshold.
+
+        Parameters
+        ----------
+        n_bins : int
+            Number of histogram bins for threshold computation.
+
+        Returns
+        -------
+        Roiable
+            Binary segmentation.
+        """
+        from . import segmentation as seg
+        result = seg.yen_threshold(self.getImage(), n_bins=n_bins)
+        r = Roiable()
+        r.setImage(result, 'segmented via Yen threshold')
+        return r
+
+    def segmentTriangle(self, n_bins=128):
+        """
+        Segment using the triangle (Zack) threshold.
+
+        Parameters
+        ----------
+        n_bins : int
+            Number of histogram bins for threshold computation.
+
+        Returns
+        -------
+        Roiable
+            Binary segmentation.
+        """
+        from . import segmentation as seg
+        result = seg.triangle_threshold(self.getImage(), n_bins=n_bins)
+        r = Roiable()
+        r.setImage(result, 'segmented via triangle threshold')
+        return r
+
+    def segmentHuang(self, n_bins=128):
+        """
+        Segment using Huang's fuzzy threshold.
+
+        Parameters
+        ----------
+        n_bins : int
+            Number of histogram bins for threshold computation.
+
+        Returns
+        -------
+        Roiable
+            Binary segmentation.
+        """
+        from . import segmentation as seg
+        result = seg.huang_threshold(self.getImage(), n_bins=n_bins)
+        r = Roiable()
+        r.setImage(result, 'segmented via Huang threshold')
+        return r
+
+    def segmentThreshold(self, lower=0.0, upper=1.0):
+        """
+        Segment by applying a manual intensity threshold.
+
+        Parameters
+        ----------
+        lower : float
+            Lower intensity bound (inclusive).
+        upper : float
+            Upper intensity bound (inclusive).
+
+        Returns
+        -------
+        Roiable
+            Binary segmentation.
+        """
+        from . import segmentation as seg
+        result = seg.manual_threshold(self.getImage(), lower, upper)
+        r = Roiable()
+        r.setImage(result, f'segmented via threshold [{lower}, {upper}]')
+        return r
+
+    def segmentConnectedThreshold(self, seed_roi, lower=None, upper=None,
+                                    n_seeds=200, face_connected=True):
+        """
+        Region growing with explicit intensity bounds from a seed ROI.
+
+        Parameters
+        ----------
+        seed_roi : Roiable or sitk.Image
+            Binary seed region.
+        lower : float, optional
+            Lower intensity bound (auto if None).
+        upper : float, optional
+            Upper intensity bound (auto if None).
+        n_seeds : int
+            Maximum seed points.
+        face_connected : bool
+            If True, use 6-connectivity. If False, use 26-connectivity.
+
+        Returns
+        -------
+        Roiable
+            Grown region.
+        """
+        from . import segmentation as seg
+        seed = seg._to_sitk(seed_roi)
+        result = seg.connected_threshold_grow(
+            self.getImage(), seed, lower=lower, upper=upper,
+            n_seeds=n_seeds, face_connected=face_connected,
+        )
+        r = Roiable()
+        r.setImage(result, 'segmented via connected threshold')
+        return r
+
+    def segmentNeighbourhoodConnected(self, seed_roi, lower=None, upper=None,
+                                       radius=1, n_seeds=200):
+        """
+        Region growing with neighbourhood connectivity.
+
+        Parameters
+        ----------
+        seed_roi : Roiable or sitk.Image
+            Binary seed region.
+        lower : float, optional
+            Lower intensity bound (auto if None).
+        upper : float, optional
+            Upper intensity bound (auto if None).
+        radius : int
+            Neighbourhood radius.
+        n_seeds : int
+            Maximum seed points.
+
+        Returns
+        -------
+        Roiable
+            Grown region.
+        """
+        from . import segmentation as seg
+        seed = seg._to_sitk(seed_roi)
+        result = seg.neighbourhood_connected_grow(
+            self.getImage(), seed, lower=lower, upper=upper,
+            radius=radius, n_seeds=n_seeds,
+        )
+        r = Roiable()
+        r.setImage(result, 'segmented via neighbourhood connected')
+        return r
+
+    def segmentIsolatedConnected(self, seed1_roi, seed2_roi, n_seeds=50):
+        """
+        Find the threshold separating two seed regions.
+
+        Parameters
+        ----------
+        seed1_roi : Roiable or sitk.Image
+            Target region seeds.
+        seed2_roi : Roiable or sitk.Image
+            Excluded region seeds.
+        n_seeds : int
+            Maximum seeds per region.
+
+        Returns
+        -------
+        Roiable
+            Segmentation of seed1 region.
+        """
+        from . import segmentation as seg
+        s1 = seg._to_sitk(seed1_roi)
+        s2 = seg._to_sitk(seed2_roi)
+        result = seg.isolated_connected_grow(self.getImage(), s1, s2, n_seeds)
+        r = Roiable()
+        r.setImage(result, 'segmented via isolated connected')
+        return r
+
+    def segmentMorphologicalWatershed(self, level=0.1, fully_connected=False):
+        """
+        Morphological watershed segmentation (marker-free).
+
+        Parameters
+        ----------
+        level : float
+            Flooding level — higher produces fewer basins.
+        fully_connected : bool
+            Use 26-connectivity vs 6-connectivity.
+
+        Returns
+        -------
+        LabelMapable
+            Label image of watershed basins.
+        """
+        from . import segmentation as seg
+        result = seg.morphological_watershed(self.getImage(), level, fully_connected)
+        lm = LabelMapable()
+        lm.setImage(result, f'morphological watershed (level={level})')
+        return lm
+
+    def segmentWatershedFromMarkers(self, markers, fully_connected=False):
+        """
+        Watershed segmentation driven by marker labels.
+
+        Parameters
+        ----------
+        markers : LabelMapable or sitk.Image
+            Integer marker image (each label seeds a basin).
+        fully_connected : bool
+            Use 26-connectivity vs 6-connectivity.
+
+        Returns
+        -------
+        LabelMapable
+            Label image of watershed basins.
+        """
+        from . import segmentation as seg
+        mk = seg._to_sitk(markers)
+        result = seg.morphological_watershed_from_markers(
+            self.getImage(), mk, fully_connected,
+        )
+        lm = LabelMapable()
+        lm.setImage(result, 'watershed from markers')
+        return lm
+
+    # ========================================================================
+    # PREPROCESSING
+    # ========================================================================
+
+    def correctBiasField(self, mask=None, shrink_factor=4, n_iterations=None,
+                         convergence_threshold=0.001, spline_order=3):
+        """
+        Apply N4 bias field correction (in-place).
+
+        Corrects low-frequency intensity inhomogeneity (e.g., MRI coil bias).
+
+        Parameters
+        ----------
+        mask : Roiable or sitk.Image, optional
+            Mask for bias estimation (Otsu if None).
+        shrink_factor : int
+            Downsample factor for speed.
+        n_iterations : list, optional
+            Iterations per fitting level. Length controls number of
+            fitting levels (default [50,50,50,50] = 4 levels).
+        convergence_threshold : float
+            Convergence threshold.
+        spline_order : int
+            B-spline order for bias field estimation (default 3).
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        mk = seg._to_sitk(mask) if mask is not None else None
+        result = seg.n4_bias_field_correction(
+            self.getImage(), mask=mk, shrink_factor=shrink_factor,
+            n_iterations=n_iterations, convergence_threshold=convergence_threshold,
+            spline_order=spline_order,
+        )
+        return self.setImage(result, 'N4 bias field corrected')
+
+    def smoothAnisotropic(self, iterations=5, time_step=0.0625, conductance=3.0):
+        """
+        Apply curvature anisotropic diffusion smoothing (in-place).
+
+        Smooths while preserving edges.
+
+        Parameters
+        ----------
+        iterations : int
+            Diffusion iterations.
+        time_step : float
+            Time step per iteration.
+        conductance : float
+            Conductance parameter.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        result = seg.anisotropic_diffusion(
+            self.getImage(), iterations=iterations,
+            time_step=time_step, conductance=conductance,
+        )
+        return self.setImage(result, 'anisotropic diffusion smoothed')
+
+    def getEdgeMap(self, sigma=1.0):
+        """
+        Compute gradient-magnitude edge potential normalised to [0, 1].
+
+        Parameters
+        ----------
+        sigma : float
+            Gaussian sigma in mm.
+
+        Returns
+        -------
+        Imaginable
+            Edge map as a new Imaginable.
+        """
+        from . import segmentation as seg
+        result = seg.compute_edge_map(self.getImage(), sigma)
+        edge = Imaginable()
+        edge.setImage(result, f'edge map (sigma={sigma})')
+        return edge
+
+
 def maskSITKImage(r,maskingvalue=1,foreground=1,outsidevalue=0):
     return sitk.Mask(r, sitk.Cast(foreground,sitk.sitkInt16), maskingValue=maskingvalue, outsideValue=outsidevalue)
 
@@ -2924,7 +3296,6 @@ def getDirectiontransform(image):
     cosines = sitk.AffineTransform(dimension)
     cosines.SetCenter(image.getImageOrigin())
     return cosines
-
 
 
 class SITKImaginable(Imaginable):
@@ -3306,6 +3677,336 @@ class Roiable(Imaginable):
             min_preserve_fraction=min_preserve_fraction, fill_holes=fill_holes,
         )
         return self.setImage(result, 'shrunk by probability')
+
+    # ========================================================================
+    # LEVEL-SET REFINEMENTS
+    # ========================================================================
+
+    def refineThresholdLevelSet(self, image, lower_threshold=0.1,
+                                upper_threshold=0.9, propagation=1.0,
+                                curvature=1.0, iterations=100,
+                                rms_tolerance=0.02, allow_shrink=True):
+        """
+        Refine ROI using a threshold-based level-set.
+
+        The contour expands into voxels whose normalised intensity
+        falls within [lower_threshold, upper_threshold].
+
+        Parameters
+        ----------
+        image : Imaginable or sitk.Image
+            Reference intensity image.
+        lower_threshold : float
+            Lower intensity bound (normalised [0, 1]).
+        upper_threshold : float
+            Upper intensity bound (normalised [0, 1]).
+        propagation : float
+            Balloon force.
+        curvature : float
+            Smoothing force.
+        iterations : int
+            Maximum iterations.
+        rms_tolerance : float
+            Convergence threshold.
+        allow_shrink : bool
+            If False, result is unioned with seed.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        img = seg._to_sitk(image)
+        result = seg.threshold_level_set_refine(
+            self.getImage(), img,
+            lower_threshold=lower_threshold, upper_threshold=upper_threshold,
+            propagation=propagation, curvature=curvature,
+            iterations=iterations, rms_tolerance=rms_tolerance,
+            allow_shrink=allow_shrink,
+        )
+        return self.setImage(result, 'refined via threshold level-set')
+
+    def refineLaplacianLevelSet(self, image, propagation=1.0, curvature=1.0,
+                                iterations=100, rms_tolerance=0.02,
+                                allow_shrink=True):
+        """
+        Refine ROI using a Laplacian-based level-set.
+
+        Drives the contour towards zero-crossings of the Laplacian.
+
+        Parameters
+        ----------
+        image : Imaginable or sitk.Image
+            Reference intensity image.
+        propagation : float
+            Balloon force.
+        curvature : float
+            Smoothing force.
+        iterations : int
+            Maximum iterations.
+        rms_tolerance : float
+            Convergence threshold.
+        allow_shrink : bool
+            If False, result is unioned with seed.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        img = seg._to_sitk(image)
+        result = seg.laplacian_level_set_refine(
+            self.getImage(), img,
+            propagation=propagation, curvature=curvature,
+            iterations=iterations, rms_tolerance=rms_tolerance,
+            allow_shrink=allow_shrink,
+        )
+        return self.setImage(result, 'refined via Laplacian level-set')
+
+    def refineShapeDetectionLevelSet(self, image, propagation=1.0, curvature=0.5,
+                                     iterations=100, rms_tolerance=0.02,
+                                     sigma_mm=1.0, allow_shrink=True):
+        """
+        Refine ROI using a shape detection level-set.
+
+        Similar to geodesic active contour but without advection.
+
+        Parameters
+        ----------
+        image : Imaginable or sitk.Image
+            Reference intensity image.
+        propagation : float
+            Balloon force.
+        curvature : float
+            Smoothing force.
+        iterations : int
+            Maximum iterations.
+        rms_tolerance : float
+            Convergence threshold.
+        sigma_mm : float
+            Gaussian sigma for edge computation.
+        allow_shrink : bool
+            If False, result is unioned with seed.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        img = seg._to_sitk(image)
+        result = seg.shape_detection_level_set_refine(
+            self.getImage(), img,
+            propagation=propagation, curvature=curvature,
+            iterations=iterations, rms_tolerance=rms_tolerance,
+            sigma_mm=sigma_mm, allow_shrink=allow_shrink,
+        )
+        return self.setImage(result, 'refined via shape detection level-set')
+
+    def refineChanVese(self, image, lambda1=1.0, lambda2=1.0,
+                       curvature_weight=0.0, area_weight=0.0,
+                       volume_weight=0.0, iterations=100,
+                       rms_tolerance=0.02, allow_shrink=True):
+        """
+        Refine ROI using Chan-Vese (region-based) level-set.
+
+        Works well for images with weak or absent edges.
+
+        Parameters
+        ----------
+        image : Imaginable or sitk.Image
+            Reference intensity image.
+        lambda1 : float
+            Inside-region variance weight.
+        lambda2 : float
+            Outside-region variance weight.
+        curvature_weight : float
+            Curvature regularisation.
+        area_weight : float
+            Area penalty.
+        volume_weight : float
+            Volume penalty.
+        iterations : int
+            Maximum iterations.
+        rms_tolerance : float
+            Convergence threshold.
+        allow_shrink : bool
+            If False, result is unioned with seed.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        img = seg._to_sitk(image)
+        result = seg.chan_vese_refine(
+            self.getImage(), img,
+            lambda1=lambda1, lambda2=lambda2,
+            curvature_weight=curvature_weight, area_weight=area_weight,
+            volume_weight=volume_weight, iterations=iterations,
+            rms_tolerance=rms_tolerance, allow_shrink=allow_shrink,
+        )
+        return self.setImage(result, 'refined via Chan-Vese')
+
+    # ========================================================================
+    # DISTANCE AND MASK OPERATIONS
+    # ========================================================================
+
+    def constrainByDistance(self, reference_roi, max_distance_mm=5.0,
+                           exclude_interior=False):
+        """
+        Clip ROI to stay within a distance from a reference ROI.
+
+        Parameters
+        ----------
+        reference_roi : Roiable or sitk.Image
+            Reference ROI.
+        max_distance_mm : float
+            Maximum allowed distance from reference surface.
+        exclude_interior : bool
+            If True, also remove voxels inside the reference.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        ref = seg._to_sitk(reference_roi)
+        result = seg.constrain_by_distance(
+            self.getImage(), ref,
+            max_distance_mm=max_distance_mm,
+            exclude_interior=exclude_interior,
+        )
+        return self.setImage(result, f'constrained by distance ({max_distance_mm}mm)')
+
+    def subtractMask(self, mask_to_remove):
+        """
+        Remove voxels that overlap with another mask.
+
+        Parameters
+        ----------
+        mask_to_remove : Roiable or sitk.Image
+            Binary mask of voxels to remove.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        mk = seg._to_sitk(mask_to_remove)
+        result = seg.subtract_mask(self.getImage(), mk)
+        return self.setImage(result, 'subtracted mask')
+
+    def intersectWith(self, other):
+        """
+        Keep only voxels present in both this ROI and other.
+
+        Parameters
+        ----------
+        other : Roiable or sitk.Image
+            Second binary ROI.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        o = seg._to_sitk(other)
+        result = seg.intersect_masks(self.getImage(), o)
+        return self.setImage(result, 'intersected with mask')
+
+    def unionWith(self, other):
+        """
+        Combine this ROI with another (logical OR).
+
+        Parameters
+        ----------
+        other : Roiable or sitk.Image
+            Second binary ROI.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        o = seg._to_sitk(other)
+        result = seg.union_masks(self.getImage(), o)
+        return self.setImage(result, 'unioned with mask')
+
+    # ========================================================================
+    # MORPHOLOGICAL OPERATIONS (mm-based)
+    # ========================================================================
+
+    def erodeMM(self, radius_mm=1.0):
+        """
+        Erode the ROI by a radius in mm.
+
+        Parameters
+        ----------
+        radius_mm : float
+            Erosion radius in mm.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        result = seg.binary_erode(self.getImage(), radius_mm)
+        return self.setImage(result, f'eroded {radius_mm}mm')
+
+    def dilateMM(self, radius_mm=1.0):
+        """
+        Dilate the ROI by a radius in mm.
+
+        Parameters
+        ----------
+        radius_mm : float
+            Dilation radius in mm.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        result = seg.binary_dilate(self.getImage(), radius_mm)
+        return self.setImage(result, f'dilated {radius_mm}mm')
+
+    def openMM(self, radius_mm=1.0):
+        """
+        Morphological opening (erosion then dilation) in mm.
+
+        Removes small protrusions and disconnected fragments.
+
+        Parameters
+        ----------
+        radius_mm : float
+            Structuring element radius in mm.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        result = seg.binary_open(self.getImage(), radius_mm)
+        return self.setImage(result, f'opened {radius_mm}mm')
+
+    def closeMM(self, radius_mm=1.0):
+        """
+        Morphological closing (dilation then erosion) in mm.
+
+        Fills small holes and gaps.
+
+        Parameters
+        ----------
+        radius_mm : float
+            Structuring element radius in mm.
+
+        Returns
+        -------
+        self
+        """
+        from . import segmentation as seg
+        result = seg.binary_close(self.getImage(), radius_mm)
+        return self.setImage(result, f'closed {radius_mm}mm')
 
     def fillBinaryHoles(self):
         """
