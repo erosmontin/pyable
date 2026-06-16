@@ -768,27 +768,73 @@ class Imaginable:
         return {'figure': fig, 'axes': axes, 'stats': stats_dict}
 
 
-    def overlayAble(self,secondimaginable, axis,index,image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None,title=None,labelmap_name=None):
-        """_summary_
+    def overlayAble(self,secondimaginable, axis,index,image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None,title=None,labelmap_name=None,titles=None,figsize=None,colorbar=None,index_mode='auto'):
+        """Overlay one or more slices from another Imaginable/LabelMapable.
 
-        Args:
-            secondimaginable (_type_): _description_
-            image_cmap (str, optional): _description_. Defaults to 'gray'.
-            labelmap_cmap (str, optional): _description_. Defaults to 'jet'.
-            alpha_value (float, optional): _description_. Defaults to 0.5.
-            image_vmin (_type_, optional): _description_. Defaults to None.
-            image_vmax (_type_, optional): _description_. Defaults to None.
-            labelmap_vmin (_type_, optional): _description_. Defaults to None.
-            labelmap_vmax (_type_, optional): _description_. Defaults to None.
+        If ``axis`` and ``index`` are scalars, a single overlay is drawn on the
+        current axes. If either is a list, tuple, range, or NumPy array, each
+        requested slice is drawn in a compact ceil(sqrt(n)) by ceil(sqrt(n))
+        grid. In ``index_mode='auto'``, multi-axis plus a 3D index point uses
+        each axis coordinate from that point. Use ``index_mode='cartesian'`` to
+        combine every requested axis with every requested index.
 
-        Returns:
-            _type_: _description_
+        For multi-slice grids, use ``titles`` for per-panel titles. Passing a
+        list/array to ``title`` is also accepted as shorthand for ``titles``;
+        passing a scalar string to ``title`` sets the figure title.
         """
         IM=self
         ROI=secondimaginable
+
+        pairs, multi_slice = makeAxisIndexPairs(axis, index, index_mode=index_mode)
+
+        if multi_slice:
+            figure_title = title
+            panel_titles = titles
+            if panel_titles is None and isinstance(title, (list, tuple, np.ndarray)):
+                panel_titles = title
+                figure_title = None
+            if panel_titles is None:
+                axes = [axis_value for axis_value, _ in pairs]
+                if len(set(axes)) > 1:
+                    panel_titles = [f"Axis {axis_value} Slice {index_value}" for axis_value, index_value in pairs]
+                else:
+                    panel_titles = [f"Slice {index_value}" for _, index_value in pairs]
+
+            images = []
+            labelmaps = []
+            for axis_value, index_value in pairs:
+                images.append(getImaginableSliceNumpy(IM, axis_value, index_value))
+                labelmaps.append(getImaginableSliceNumpy(ROI, axis_value, index_value))
+
+            return overlayNumpyImageAndNumpyLabelmapGrid(
+                images,
+                labelmaps,
+                image_cmap=image_cmap,
+                labelmap_cmap=labelmap_cmap,
+                alpha_value=alpha_value,
+                image_vmax=image_vmax,
+                image_vmin=image_vmin,
+                labelmap_vmax=labelmap_vmax,
+                labelmap_vmin=labelmap_vmin,
+                show=show,
+                save=save,
+                title=figure_title,
+                titles=panel_titles,
+                labelmap_name=labelmap_name,
+                figsize=figsize,
+                colorbar=False if colorbar is None else colorbar,
+            )
         
-        im = getImaginableSliceNumpy(IM, axis, index)
-        im2 = getImaginableSliceNumpy(ROI, axis, index)
+        if titles is not None and title is None:
+            if isinstance(titles, (list, tuple, np.ndarray)):
+                flat_titles = np.asarray(titles, dtype=object).ravel()
+                title = None if flat_titles.size == 0 else flat_titles[0]
+            else:
+                title = titles
+
+        axis_value, index_value = pairs[0]
+        im = getImaginableSliceNumpy(IM, axis_value, index_value)
+        im2 = getImaginableSliceNumpy(ROI, axis_value, index_value)
 
         # getImaginableSliceNumpy() returns a 2D numpy slice in (Y,X) ordering
         # which is directly compatible with matplotlib.imshow (rows, cols).
@@ -805,7 +851,91 @@ class Imaginable:
             show=show,
             save=save,
             title=title,
-            labelmap_name=labelmap_name
+            labelmap_name=labelmap_name,
+            colorbar=True if colorbar is None else colorbar
+        )
+
+
+    def overlayAbleImage(self,secondimaginable, axis,index,image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,as_base64=False,data_uri=False,save=None,origin='lower',title=None,titles=None,ncols=None,tile_gap=0,slice_offsets=None,title_font_size=12,title_padding=2,title_color=(255,255,255,255),background=(0,0,0,255),index_mode='auto'):
+        """Return only the image+overlay raster for one or more slices.
+
+        Returns an ``(H, W, 4)`` uint8 RGBA array by default. If
+        ``as_base64=True``, returns a PNG base64 string instead. Pass a
+        list/array/range of axes or indices, or pass ``slice_offsets`` with a
+        scalar center index, to create a tight 2.5D montage. In
+        ``index_mode='auto'``, multi-axis plus a 3D index point uses each axis
+        coordinate from that point. Use ``index_mode='cartesian'`` to combine
+        every requested axis with every requested index.
+        """
+        pairs, multi_slice = makeAxisIndexPairs(axis, index, slice_offsets=slice_offsets, index_mode=index_mode)
+
+        if multi_slice:
+            figure_title = title
+            panel_titles = titles
+            if panel_titles is None and isinstance(title, (list, tuple, np.ndarray)):
+                panel_titles = title
+                figure_title = None
+
+            images = []
+            labelmaps = []
+            for axis_value, index_value in pairs:
+                images.append(getImaginableSliceNumpy(self, axis_value, index_value))
+                labelmaps.append(getImaginableSliceNumpy(secondimaginable, axis_value, index_value))
+
+            return overlayNumpyImageAndNumpyLabelmapGridToImage(
+                images,
+                labelmaps,
+                image_cmap=image_cmap,
+                labelmap_cmap=labelmap_cmap,
+                alpha_value=alpha_value,
+                image_vmax=image_vmax,
+                image_vmin=image_vmin,
+                labelmap_vmax=labelmap_vmax,
+                labelmap_vmin=labelmap_vmin,
+                as_base64=as_base64,
+                data_uri=data_uri,
+                save=save,
+                origin=origin,
+                title=figure_title,
+                titles=panel_titles,
+                ncols=ncols,
+                tile_gap=tile_gap,
+                title_font_size=title_font_size,
+                title_padding=title_padding,
+                title_color=title_color,
+                background=background
+            )
+
+        if titles is not None and title is None:
+            if isinstance(titles, (list, tuple, np.ndarray)):
+                flat_titles = np.asarray(titles, dtype=object).ravel()
+                title = None if flat_titles.size == 0 else flat_titles[0]
+            else:
+                title = titles
+
+        axis_value, index_value = pairs[0]
+        im = getImaginableSliceNumpy(self, axis_value, index_value)
+        im2 = getImaginableSliceNumpy(secondimaginable, axis_value, index_value)
+
+        return overlayNumpyImageAndNumpyLabelmapToImage(
+            im,
+            im2,
+            image_cmap=image_cmap,
+            labelmap_cmap=labelmap_cmap,
+            alpha_value=alpha_value,
+            image_vmax=image_vmax,
+            image_vmin=image_vmin,
+            labelmap_vmax=labelmap_vmax,
+            labelmap_vmin=labelmap_vmin,
+            as_base64=as_base64,
+            data_uri=data_uri,
+            save=save,
+            origin=origin,
+            title=title,
+            title_font_size=title_font_size,
+            title_padding=title_padding,
+            title_color=title_color,
+            background=background
         )
 
 

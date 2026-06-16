@@ -132,7 +132,8 @@ This document is the package-level reference for the public classes in `pyable`.
 - `getSliceNormalK(slice)`, `getSliceNormalJ(slice)`, `getSliceNormalI(slice) -> Imaginable`: same slice extraction as wrapped images.
 - `viewK(km=[True, True])`, `viewJ(km=[True, True])`, `viewI(km=[True, True])`: legacy plane viewers.
 - `viewAxial()`, `viewCoronal()`, `viewSagittal()`, `view2D()`: quick inspection viewers.
-- `overlayAble(secondimaginable, axis, index, ...) -> matplotlib object`: 2D overlay helper.
+- `overlayAble(secondimaginable, axis, index, ..., titles=None, figsize=None, colorbar=None, index_mode="auto") -> matplotlib object`: 2D overlay helper. Pass list/array `axis` and/or `index` values to render a compact grid; multi-axis plus a 3D `index` point uses `index[axis]` by default. Use `index_mode="cartesian"` to combine every axis with every index.
+- `overlayAbleImage(secondimaginable, axis, index, ..., title=None, titles=None, ncols=None, slice_offsets=None, as_base64=False, data_uri=False, save=None, index_mode="auto") -> np.ndarray | str`: image+overlay raster only, returned as RGBA pixels or PNG base64. Pass multiple axes and a 3D `index` point for orthogonal planes, or use `slice_offsets` for a tight 2.5D montage.
 - `overlayReport(overlay, spacing=None, orientation="LPS", views="all", slice_offsets=None, fill_alpha=0.2, contour_alpha=0.95, overlay_color=(1, 0, 0), contour_iterations=2, image_cmap="gray", figsize=None, title=None, show=False, save=None, dpi=150, stats=True) -> matplotlib figure`: publication-style report.
 - `plotOverlay(overlay=None, alpha=0.5, title=None, slice_idx=None, **kwargs) -> PlotViewer`: plotting wrapper.
 - `viewInteractive(overlays=None, orientation=2, slice_idx=None, title=None, figsize=(14, 10), cmap="gray") -> InteractiveViewer`: interactive viewer entry point.

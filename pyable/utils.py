@@ -3,6 +3,9 @@ try:
 except:
     import pyable.imaginable as ima
 
+import base64
+from io import BytesIO
+
 import numpy as np
 
 # Input: expects 3xN matrix of points
@@ -70,7 +73,7 @@ def getImaginableSliceNumpy(I,axis,index):
     return getImaginableSlice(I,axis,index).getImageAsNumpy()
 
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 import matplotlib
 def saveSliceToImage(I,axis,index,fn,spacing=None):
@@ -81,11 +84,269 @@ def saveSliceToImage(I,axis,index,fn,spacing=None):
 
 
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
 
-def overlayNumpyImageAndNumpyLabelmap(image, labelmap, image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None,title=None,labelmap_name=None):
+def isListLikeIndex(value):
+    return (
+        (isinstance(value, np.ndarray) and value.ndim > 0)
+        or isinstance(value, (list, tuple, range))
+    )
+
+
+def asIntList(value, name):
+    if isinstance(value, np.ndarray):
+        values = value.ravel()
+    else:
+        values = np.asarray(list(value) if isListLikeIndex(value) else [value]).ravel()
+    if values.size == 0:
+        raise ValueError(f"{name} must contain at least one value.")
+    return [int(v) for v in values]
+
+
+def makeAxisIndexPairs(axis, index, slice_offsets=None, index_mode='auto'):
+    axes = asIntList(axis, "axis")
+    multi_axis = isListLikeIndex(axis)
+    multi_index = isListLikeIndex(index)
+    index_values = asIntList(index, "index")
+
+    if index_mode not in ('auto', 'point', 'cartesian'):
+        raise ValueError("index_mode must be 'auto', 'point', or 'cartesian'.")
+
+    if index_mode == 'auto':
+        if multi_axis and multi_index and min(axes) >= 0 and max(axes) < len(index_values):
+            index_mode = 'point'
+        else:
+            index_mode = 'cartesian'
+
+    offsets = None
+    if slice_offsets is not None:
+        offsets = asIntList(slice_offsets, "slice_offsets")
+
+    if index_mode == 'point':
+        if min(axes) < 0 or max(axes) >= len(index_values):
+            raise ValueError("index point must contain one coordinate for each requested axis.")
+        axis_centers = [(axis_value, index_values[axis_value]) for axis_value in axes]
+        if offsets is None:
+            pairs = axis_centers
+        else:
+            pairs = [
+                (axis_value, center_index + offset)
+                for axis_value, center_index in axis_centers
+                for offset in offsets
+            ]
+    else:
+        if offsets is not None:
+            if multi_index:
+                raise ValueError(
+                    "slice_offsets with multiple index values is ambiguous; "
+                    "pass an index point with index_mode='point' or a scalar center index."
+                )
+            indices = [index_values[0] + offset for offset in offsets]
+        else:
+            indices = index_values
+        pairs = [(axis_value, index_value) for axis_value in axes for index_value in indices]
+
+    return pairs, (multi_axis or multi_index or slice_offsets is not None)
+
+
+def _rgba_tuple(value):
+    if len(value) == 3:
+        return tuple(value) + (255,)
+    return tuple(value)
+
+
+def _get_default_font(size):
+    for font_name in ("arial.ttf", "DejaVuSans.ttf"):
+        try:
+            return ImageFont.truetype(font_name, size=size)
+        except OSError:
+            pass
+    return ImageFont.load_default()
+
+
+def _text_bbox(text, font):
+    probe = Image.new('RGBA', (1, 1))
+    draw = ImageDraw.Draw(probe)
+    try:
+        return draw.textbbox((0, 0), text, font=font)
+    except AttributeError:
+        width, height = draw.textsize(text, font=font)
+        return (0, 0, width, height)
+
+
+def _add_tight_title_band(rgba_uint8, title, font_size=12, padding=2, title_color=(255, 255, 255, 255), background=(0, 0, 0, 255)):
+    if title is None or title == "":
+        return rgba_uint8
+
+    title = str(title)
+    image = Image.fromarray(rgba_uint8, mode='RGBA')
+    font = _get_default_font(font_size)
+    bbox = _text_bbox(title, font)
+    text_w = bbox[2] - bbox[0]
+    text_h = bbox[3] - bbox[1]
+    pad = max(0, int(padding))
+    band_h = text_h + 2 * pad
+    out_w = max(image.width, text_w + 2 * pad)
+    out_h = image.height + band_h
+
+    canvas = Image.new('RGBA', (out_w, out_h), _rgba_tuple(background))
+    draw = ImageDraw.Draw(canvas)
+    text_x = (out_w - text_w) // 2 - bbox[0]
+    text_y = pad - bbox[1]
+    draw.text((text_x, text_y), title, font=font, fill=_rgba_tuple(title_color))
+    canvas.alpha_composite(image, ((out_w - image.width) // 2, band_h))
+    return np.asarray(canvas)
+
+
+def _save_encode_or_return_rgba(rgba_uint8, as_base64=False, data_uri=False, save=None):
+    if save or as_base64:
+        pil_image = Image.fromarray(rgba_uint8, mode='RGBA')
+        if save:
+            pil_image.save(save)
+        if as_base64:
+            buffer = BytesIO()
+            pil_image.save(buffer, format='PNG')
+            encoded = base64.b64encode(buffer.getvalue()).decode('ascii')
+            if data_uri:
+                encoded = f"data:image/png;base64,{encoded}"
+            return encoded
+
+    return rgba_uint8
+
+
+def overlayNumpyImageAndNumpyLabelmapToImage(image, labelmap, image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None, as_base64=False, data_uri=False, save=None, origin='lower', title=None, title_font_size=12, title_padding=2, title_color=(255, 255, 255, 255), background=(0, 0, 0, 255)):
+    """Return only the composited image+overlay raster.
+
+    By default this returns an ``(H, W, 4)`` uint8 RGBA NumPy array. If
+    ``as_base64`` is True, it returns a PNG-encoded base64 string instead.
+    """
+    image = np.asarray(image)
+    labelmap = np.asarray(labelmap)
+    if image.shape != labelmap.shape:
+        raise ValueError("image and labelmap must have the same shape.")
+    if origin not in ('lower', 'upper'):
+        raise ValueError("origin must be 'lower' or 'upper'.")
+
+    image_norm = plt.Normalize(image_vmin, image_vmax)
+    labelmap_norm = plt.Normalize(labelmap_vmin, labelmap_vmax)
+
+    image_rgba = plt.get_cmap(image_cmap)(image_norm(image))
+    labelmap_rgba = plt.get_cmap(labelmap_cmap)(labelmap_norm(labelmap))
+
+    alpha = np.where(labelmap == 0, 0.0, alpha_value).astype(float)
+    alpha = np.clip(alpha, 0.0, 1.0)[..., np.newaxis]
+
+    rgb = image_rgba[..., :3] * (1.0 - alpha) + labelmap_rgba[..., :3] * alpha
+    rgba = np.concatenate([rgb, np.ones_like(alpha)], axis=-1)
+    if origin == 'lower':
+        rgba = np.flipud(rgba)
+
+    rgba_uint8 = np.round(np.clip(rgba, 0.0, 1.0) * 255).astype(np.uint8)
+    rgba_uint8 = _add_tight_title_band(
+        rgba_uint8,
+        title,
+        font_size=title_font_size,
+        padding=title_padding,
+        title_color=title_color,
+        background=background,
+    )
+
+    return _save_encode_or_return_rgba(
+        rgba_uint8,
+        as_base64=as_base64,
+        data_uri=data_uri,
+        save=save,
+    )
+
+
+def overlayNumpyImageAndNumpyLabelmapGridToImage(images, labelmaps, image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None, as_base64=False, data_uri=False, save=None, origin='lower', title=None, titles=None, ncols=None, tile_gap=0, title_font_size=12, title_padding=2, title_color=(255, 255, 255, 255), background=(0, 0, 0, 255)):
+    """Return a tight raster montage of image+overlay slices."""
+    images = list(images)
+    labelmaps = list(labelmaps)
+    n_items = len(images)
+
+    if n_items == 0:
+        raise ValueError("At least one image/labelmap pair is required.")
+    if n_items != len(labelmaps):
+        raise ValueError("images and labelmaps must contain the same number of items.")
+
+    if titles is None:
+        panel_titles = [None] * n_items
+    else:
+        panel_titles = np.asarray(titles, dtype=object).ravel().tolist()
+        if len(panel_titles) != n_items:
+            raise ValueError("titles must contain one title per image/labelmap pair.")
+
+    if ncols is None:
+        ncols = int(np.ceil(np.sqrt(n_items)))
+    ncols = int(ncols)
+    if ncols < 1:
+        raise ValueError("ncols must be at least 1.")
+    ncols = min(ncols, n_items)
+    nrows = int(np.ceil(n_items / ncols))
+    gap = max(0, int(tile_gap))
+
+    tiles = []
+    for image, labelmap, panel_title in zip(images, labelmaps, panel_titles):
+        tiles.append(
+            overlayNumpyImageAndNumpyLabelmapToImage(
+                image,
+                labelmap,
+                image_cmap=image_cmap,
+                labelmap_cmap=labelmap_cmap,
+                alpha_value=alpha_value,
+                image_vmin=image_vmin,
+                image_vmax=image_vmax,
+                labelmap_vmin=labelmap_vmin,
+                labelmap_vmax=labelmap_vmax,
+                as_base64=False,
+                data_uri=False,
+                save=None,
+                origin=origin,
+                title=panel_title,
+                title_font_size=title_font_size,
+                title_padding=title_padding,
+                title_color=title_color,
+                background=background,
+            )
+        )
+
+    tile_h = max(tile.shape[0] for tile in tiles)
+    tile_w = max(tile.shape[1] for tile in tiles)
+    out_w = ncols * tile_w + (ncols - 1) * gap
+    out_h = nrows * tile_h + (nrows - 1) * gap
+
+    canvas = Image.new('RGBA', (out_w, out_h), _rgba_tuple(background))
+    for i, tile in enumerate(tiles):
+        row = i // ncols
+        col = i % ncols
+        tile_image = Image.fromarray(tile, mode='RGBA')
+        x = col * (tile_w + gap) + (tile_w - tile_image.width) // 2
+        y = row * (tile_h + gap) + (tile_h - tile_image.height) // 2
+        canvas.alpha_composite(tile_image, (x, y))
+
+    rgba_uint8 = np.asarray(canvas)
+    rgba_uint8 = _add_tight_title_band(
+        rgba_uint8,
+        title,
+        font_size=title_font_size,
+        padding=title_padding,
+        title_color=title_color,
+        background=background,
+    )
+
+    return _save_encode_or_return_rgba(
+        rgba_uint8,
+        as_base64=as_base64,
+        data_uri=data_uri,
+        save=save,
+    )
+
+def overlayNumpyImageAndNumpyLabelmap(image, labelmap, image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None,title=None,labelmap_name=None, ax=None, colorbar=True):
+    if ax is None:
+        ax = plt.gca()
+
     # Display the image as it is
-    plt.imshow(image, cmap=image_cmap, vmin=image_vmin, vmax=image_vmax,origin='lower')
+    im_handle = ax.imshow(image, cmap=image_cmap, vmin=image_vmin, vmax=image_vmax,origin='lower')
 
     # Clip the labelmap values to the desired range
     # labelmap_clipped = labelmap
@@ -101,7 +362,7 @@ def overlayNumpyImageAndNumpyLabelmap(image, labelmap, image_cmap='gray', labelm
     labelmap_norm = plt.Normalize(labelmap_vmin, labelmap_vmax)
 
     # Apply colormap to the normalized labelmap
-    labelmap_colored = cm.get_cmap(labelmap_cmap)(labelmap_norm(labelmap))
+    labelmap_colored = plt.get_cmap(labelmap_cmap)(labelmap_norm(labelmap))
 
 
     # Create an alpha channel based on the labelmap
@@ -111,22 +372,105 @@ def overlayNumpyImageAndNumpyLabelmap(image, labelmap, image_cmap='gray', labelm
     labelmap_colored[..., 3] = alpha_channel
 
     # Overlay the labelmap on top of the image
-    lbl=plt.imshow(labelmap_colored,origin='lower')
+    lbl=ax.imshow(labelmap_colored,origin='lower')
     # Create a ScalarMappable object for the colorbar
     sm = plt.cm.ScalarMappable(cmap=labelmap_cmap, norm=labelmap_norm)
     sm.set_array([])
 
     # Add the colorbar
-    plt.colorbar(sm, label=labelmap_name)
+    colorbar_handle = None
+    if colorbar:
+        colorbar_handle = ax.figure.colorbar(sm, ax=ax, label=labelmap_name)
     
 
     if title:
-        plt.title(title)
+        ax.set_title(title)
     
     if save:
-        plt.savefig(save,dpi=300)
+        ax.figure.savefig(save,dpi=300)
     if show:
         plt.show()
+
+    return {
+        'figure': ax.figure,
+        'axis': ax,
+        'image': im_handle,
+        'overlay': lbl,
+        'colorbar': colorbar_handle,
+    }
+
+
+def overlayNumpyImageAndNumpyLabelmapGrid(images, labelmaps, image_cmap='gray', labelmap_cmap='jet', alpha_value=0.5, image_vmin=None, image_vmax=None, labelmap_vmin=None, labelmap_vmax=None,show=False,save=None,title=None,titles=None,labelmap_name=None, colorbar=False, figsize=None):
+    images = list(images)
+    labelmaps = list(labelmaps)
+    n_items = len(images)
+
+    if n_items == 0:
+        raise ValueError("At least one image/labelmap pair is required.")
+    if n_items != len(labelmaps):
+        raise ValueError("images and labelmaps must contain the same number of items.")
+
+    if titles is None:
+        panel_titles = [None] * n_items
+    else:
+        panel_titles = np.asarray(titles, dtype=object).ravel().tolist()
+        if len(panel_titles) != n_items:
+            raise ValueError("titles must contain one title per image/labelmap pair.")
+
+    n_grid = int(np.ceil(np.sqrt(n_items)))
+    if figsize is None:
+        figsize = (3.0 * n_grid, 3.0 * n_grid)
+
+    fig, axes = plt.subplots(n_grid, n_grid, figsize=figsize, squeeze=False)
+    axes_flat = axes.ravel()
+    panels = []
+
+    for i, (image, labelmap) in enumerate(zip(images, labelmaps)):
+        ax = axes_flat[i]
+        panel = overlayNumpyImageAndNumpyLabelmap(
+            image,
+            labelmap,
+            image_cmap=image_cmap,
+            labelmap_cmap=labelmap_cmap,
+            alpha_value=alpha_value,
+            image_vmin=image_vmin,
+            image_vmax=image_vmax,
+            labelmap_vmin=labelmap_vmin,
+            labelmap_vmax=labelmap_vmax,
+            show=False,
+            save=None,
+            title=None,
+            labelmap_name=labelmap_name,
+            ax=ax,
+            colorbar=colorbar,
+        )
+        ax.set_xticks([])
+        ax.set_yticks([])
+        if panel_titles[i]:
+            ax.set_title(str(panel_titles[i]), fontsize=9, pad=2)
+        panels.append(panel)
+
+    for ax in axes_flat[n_items:]:
+        ax.axis('off')
+
+    if title:
+        fig.suptitle(title)
+
+    has_panel_titles = any(panel_titles)
+    top = 0.92 if title else (0.98 if has_panel_titles else 1.0)
+    hspace = 0.16 if has_panel_titles else 0.02
+    fig.subplots_adjust(left=0, right=1, bottom=0, top=top, wspace=0.02, hspace=hspace)
+
+    if save:
+        fig.savefig(save, dpi=300, bbox_inches='tight', pad_inches=0.02)
+    if show:
+        plt.show()
+
+    return {
+        'figure': fig,
+        'axes': axes,
+        'panels': panels,
+    }
     
     
 
