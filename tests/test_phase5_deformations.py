@@ -64,14 +64,29 @@ class TestDeformationFieldInitialization(unittest.TestCase):
 
     def test_initialize_from_file(self):
         """Test displacement field initialization from image file."""
-        with tempfile.NamedTemporaryFile(suffix='.nii.gz', delete=False) as f:
-            sitk.WriteImage(self.test_image, f.name)
-            
-            df, size, origin, spacing, direction = deformations.initialize_deformation_field(f.name)
-            
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            image_path = (
+                Path(temporary_directory)
+                / "test_displacement_field.nii.gz"
+            )
+
+            sitk.WriteImage(
+                self.test_image,
+                str(image_path),
+            )
+
+            df, size, origin, spacing, direction = (
+                deformations.initialize_deformation_field(
+                    str(image_path)
+                )
+            )
+
             self.assertEqual(df.GetSize(), self.size)
-            
-            Path(f.name).unlink()  # Clean up
+            self.assertEqual(size, self.size)
+            self.assertEqual(origin, self.origin)
+            self.assertEqual(spacing, self.spacing)
+            self.assertEqual(direction, self.direction)
 
 
 class TestTransformToDisplacementField(unittest.TestCase):

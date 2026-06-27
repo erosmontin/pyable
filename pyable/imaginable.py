@@ -482,6 +482,48 @@ class Imaginable:
         return sitk2vtk(self.getImage())
     
     
+    
+    ###
+    def getParaViewData(
+        self,
+        space="lps",
+        stride=1,
+        array_name="values",
+    ):
+        """
+        Return the image as a coordinate-aware vtkStructuredGrid.
+        """
+        from .meshable import sitk_to_structured_grid
+
+        return sitk_to_structured_grid(
+            self.getImage(),
+            space=space,
+            stride=stride,
+            array_name=array_name,
+        )
+
+
+    def writeParaView(
+        self,
+        output_path,
+        space="lps",
+        stride=1,
+        array_name="values",
+    ):
+        """
+        Write the image as a ParaView-compatible VTS file.
+        """
+        from .meshable import write_vtk_dataset
+
+        dataset = self.getParaViewData(
+            space=space,
+            stride=stride,
+            array_name=array_name,
+        )
+
+        return write_vtk_dataset(dataset, output_path)
+    ###
+    
     def overlayReport(
         self,
         overlay,
@@ -3639,6 +3681,117 @@ class Roiable(Imaginable):
         )
         return self.setImage(result, 'refined via watershed')
 
+    
+    
+    
+    
+    def getParaViewSurface(self, space="lps"):
+        from .meshable import binary_mask_to_polydata
+
+        return binary_mask_to_polydata(
+            self.getImage(),
+            space=space,
+        )
+
+
+    def writeParaView(
+        self,
+        output_path,
+        mode="surface",
+        space="lps",
+        stride=1,
+        array_name="mask",
+    ):
+        from .meshable import write_vtk_dataset
+
+        if mode == "volume":
+            return super().writeParaView(
+                output_path,
+                space=space,
+                stride=stride,
+                array_name=array_name,
+            )
+
+        if mode != "surface":
+            raise ValueError("Roiable mode must be 'surface' or 'volume'.")
+
+        surface = self.getParaViewSurface(space=space)
+        return write_vtk_dataset(surface, output_path)
+
+    
+    import vtk
+    import numpy as np
+    from vtk.util.numpy_support import numpy_to_vtk
+    
+    
+    def binary_mask_to_polydata(    image: sitk.Image,
+    space: str = "lps",
+    level: float = 0.5,
+) -> vtk.vtkPolyData:
+        from skimage.measure import marching_cubes
+
+        mask = sitk.GetArrayFromImage(image) > 0
+
+        if mask.ndim != 3:
+            raise ValueError("A surface requires a 3D binary image.")
+
+        if not np.any(mask):
+            raise ValueError("Cannot create a surface from an empty mask.")
+
+        padded = np.pad(
+            mask.astype(np.uint8),
+            pad_width=1,
+            mode="constant",
+            constant_values=0,
+        )
+
+        vertices_zyx, faces, _, _ = marching_cubes(
+            padded,
+            level=level,
+        )
+
+        vertices_zyx -= 1.0
+
+        # skimage returns ZYX; transform helper expects IJK = XYZ.
+        vertices_ijk = vertices_zyx[:, [2, 1, 0]]
+
+        matrix = get_voxel_to_space_matrix(image, space)
+        vertices_xyz = transform_points(vertices_ijk, matrix)
+
+        vtk_points = vtk.vtkPoints()
+        vtk_points.SetData(
+            numpy_to_vtk(
+                vertices_xyz.astype(np.float32),
+                deep=True,
+            )
+        )
+
+        vtk_faces = vtk.vtkCellArray()
+
+        for face in faces:
+            triangle = vtk.vtkTriangle()
+            triangle.GetPointIds().SetId(0, int(face[0]))
+            triangle.GetPointIds().SetId(1, int(face[1]))
+            triangle.GetPointIds().SetId(2, int(face[2]))
+            vtk_faces.InsertNextCell(triangle)
+
+        polydata = vtk.vtkPolyData()
+        polydata.SetPoints(vtk_points)
+        polydata.SetPolys(vtk_faces)
+
+        normals = vtk.vtkPolyDataNormals()
+        normals.SetInputData(polydata)
+        normals.AutoOrientNormalsOn()
+        normals.ConsistencyOn()
+        normals.SplittingOff()
+        normals.Update()
+
+        output = vtk.vtkPolyData()
+        output.ShallowCopy(normals.GetOutput())
+
+        return output
+    
+    
     def refineRegionGrowing(self, image, multiplier=2.5, neighborhood_radius=1,
                             n_iterations=3, max_distance_mm=10.0, n_seeds=100,
                             prob_map=None, prob_threshold=0.1, min_voxels=50):
