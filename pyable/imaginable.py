@@ -3684,13 +3684,22 @@ class Roiable(Imaginable):
     
     
     
-    
-    def getParaViewSurface(self, space="lps"):
+    def getParaViewSurface(
+        self,
+        space="lps",
+        smooth_iterations=0,
+        relaxation_factor=0.1,
+    ):
+        """
+        Return the ROI as a coordinate-aware vtkPolyData surface.
+        """
         from .meshable import binary_mask_to_polydata
 
         return binary_mask_to_polydata(
             self.getImage(),
             space=space,
+            smooth_iterations=smooth_iterations,
+            relaxation_factor=relaxation_factor,
         )
 
 
@@ -3701,8 +3710,21 @@ class Roiable(Imaginable):
         space="lps",
         stride=1,
         array_name="mask",
+        smooth_iterations=0,
+        relaxation_factor=0.1,
     ):
+        """
+        Export the ROI for ParaView.
+
+        mode="surface"
+            Write a .vtp surface.
+
+        mode="volume"
+            Write a .vts voxel volume.
+        """
         from .meshable import write_vtk_dataset
+
+        mode = mode.lower()
 
         if mode == "volume":
             return super().writeParaView(
@@ -3713,85 +3735,22 @@ class Roiable(Imaginable):
             )
 
         if mode != "surface":
-            raise ValueError("Roiable mode must be 'surface' or 'volume'.")
-
-        surface = self.getParaViewSurface(space=space)
-        return write_vtk_dataset(surface, output_path)
-
-    
-    import vtk
-    import numpy as np
-    from vtk.util.numpy_support import numpy_to_vtk
-    
-    
-    def binary_mask_to_polydata(    image: sitk.Image,
-    space: str = "lps",
-    level: float = 0.5,
-) -> vtk.vtkPolyData:
-        from skimage.measure import marching_cubes
-
-        mask = sitk.GetArrayFromImage(image) > 0
-
-        if mask.ndim != 3:
-            raise ValueError("A surface requires a 3D binary image.")
-
-        if not np.any(mask):
-            raise ValueError("Cannot create a surface from an empty mask.")
-
-        padded = np.pad(
-            mask.astype(np.uint8),
-            pad_width=1,
-            mode="constant",
-            constant_values=0,
-        )
-
-        vertices_zyx, faces, _, _ = marching_cubes(
-            padded,
-            level=level,
-        )
-
-        vertices_zyx -= 1.0
-
-        # skimage returns ZYX; transform helper expects IJK = XYZ.
-        vertices_ijk = vertices_zyx[:, [2, 1, 0]]
-
-        matrix = get_voxel_to_space_matrix(image, space)
-        vertices_xyz = transform_points(vertices_ijk, matrix)
-
-        vtk_points = vtk.vtkPoints()
-        vtk_points.SetData(
-            numpy_to_vtk(
-                vertices_xyz.astype(np.float32),
-                deep=True,
+            raise ValueError(
+                "Roiable mode must be 'surface' or 'volume'."
             )
+
+        surface = self.getParaViewSurface(
+            space=space,
+            smooth_iterations=smooth_iterations,
+            relaxation_factor=relaxation_factor,
         )
 
-        vtk_faces = vtk.vtkCellArray()
+        return write_vtk_dataset(
+            surface,
+            output_path,
+        )
 
-        for face in faces:
-            triangle = vtk.vtkTriangle()
-            triangle.GetPointIds().SetId(0, int(face[0]))
-            triangle.GetPointIds().SetId(1, int(face[1]))
-            triangle.GetPointIds().SetId(2, int(face[2]))
-            vtk_faces.InsertNextCell(triangle)
 
-        polydata = vtk.vtkPolyData()
-        polydata.SetPoints(vtk_points)
-        polydata.SetPolys(vtk_faces)
-
-        normals = vtk.vtkPolyDataNormals()
-        normals.SetInputData(polydata)
-        normals.AutoOrientNormalsOn()
-        normals.ConsistencyOn()
-        normals.SplittingOff()
-        normals.Update()
-
-        output = vtk.vtkPolyData()
-        output.ShallowCopy(normals.GetOutput())
-
-        return output
-    
-    
     def refineRegionGrowing(self, image, multiplier=2.5, neighborhood_radius=1,
                             n_iterations=3, max_distance_mm=10.0, n_seeds=100,
                             prob_map=None, prob_threshold=0.1, min_voxels=50):
@@ -4995,6 +4954,156 @@ class LabelMapable(Imaginable):
     # ========================================================================
     # COMPARISON METHODS
     # ========================================================================
+
+    def writeParaView(
+        self,
+        output_path,
+        space="lps",
+        labels=None,
+        prefix="label",
+        label_names=None,
+        smooth_iterations=0,
+        relaxation_factor=0.1,
+    ):
+        """
+        Export a label map for ParaView.
+
+        If output_path ends with ".vtm", all labels are written into one
+        multiblock VTK file.
+
+        Otherwise, output_path is treated as a directory and one ".vtp"
+        surface file is written for each nonzero label.
+
+        Parameters
+        ----------
+        output_path : str or pathlib.Path
+            Output directory for separate VTP files, or a VTM filename.
+        space : str
+            Coordinate space: "lps", "ras", "fsl", or "index".
+        labels : sequence of int, optional
+            Labels to export. By default, all nonzero labels are exported.
+        prefix : str
+            Filename prefix for separate label files.
+        label_names : dict, optional
+            Mapping from label values to readable names.
+        smooth_iterations : int
+            Optional number of surface smoothing iterations.
+        relaxation_factor : float
+            Smoothing relaxation factor.
+
+        Returns
+        -------
+        dict or str
+            Dictionary of label-to-file mappings for separate files,
+            or the VTM filename when writing a multiblock file.
+        """
+        from pathlib import Path
+        import re
+
+        import numpy as np
+        import SimpleITK as sitk
+
+        from .meshable import (
+            label_map_to_multiblock,
+            write_vtk_dataset,
+        )
+
+        output_path = Path(output_path)
+        image = self.getImage()
+
+        array = sitk.GetArrayViewFromImage(image)
+
+        if labels is None:
+            labels = [
+                int(value)
+                for value in np.unique(array)
+                if int(value) != 0
+            ]
+        else:
+            labels = [
+                int(value)
+                for value in labels
+                if int(value) != 0
+            ]
+
+        if not labels:
+            raise ValueError(
+                "The LabelMapable contains no nonzero labels to export."
+            )
+
+        # --------------------------------------------------------------
+        # Option 1: one VTM multiblock file
+        # --------------------------------------------------------------
+        if output_path.suffix.lower() == ".vtm":
+            surfaces = label_map_to_multiblock(
+                image,
+                labels=labels,
+                space=space,
+                smooth_iterations=smooth_iterations,
+                relaxation_factor=relaxation_factor,
+            )
+
+            return write_vtk_dataset(
+                surfaces,
+                output_path,
+            )
+
+        # Reject unsupported file extensions.
+        if output_path.suffix:
+            raise ValueError(
+                "For a LabelMapable, output_path must either be a "
+                "directory or a filename ending in '.vtm'."
+            )
+
+        # --------------------------------------------------------------
+        # Option 2: one VTP file per label
+        # --------------------------------------------------------------
+        output_path.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        label_names = label_names or {}
+        written_files = {}
+
+        for label_value in labels:
+            mask = sitk.Cast(
+                image == label_value,
+                sitk.sitkUInt8,
+            )
+
+            if not np.any(
+                sitk.GetArrayViewFromImage(mask)
+            ):
+                continue
+
+            # Reuse the Roiable implementation.
+            roi = Roiable(image=mask)
+
+            label_name = label_names.get(
+                label_value,
+                f"label_{label_value}",
+            )
+
+            safe_name = re.sub(
+                r"[^A-Za-z0-9_.-]+",
+                "_",
+                str(label_name),
+            ).strip("_")
+
+            output_filename = (
+                output_path
+                / f"{prefix}_{safe_name}.vtp"
+            )
+
+            written_files[label_value] = roi.writeParaView(
+                output_filename,
+                space=space,
+                smooth_iterations=smooth_iterations,
+                relaxation_factor=relaxation_factor,
+            )
+
+        return written_files
 
     def compareToByLabel(self, other, labels=None):
         """
