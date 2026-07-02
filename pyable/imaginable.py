@@ -4790,6 +4790,70 @@ class LabelMapable(Imaginable):
     def noNearestNeighborExtrapolator(self):
         self.dfltuseNearestNeighborExtrapolator=False
         return self
+
+    @classmethod
+    def fromMasks(cls, masks, values, reference=None, remove_small_obj=None, overlap="overwrite"):
+        """
+        Create a LabelMapable from N binary/ROI masks and N label values.
+
+        Args:
+            masks: list of mask sources (file paths, Roiable, or Imaginable objects)
+            values: list of integer label values, one per mask
+            reference: reference image for resampling (sitk.Image or Imaginable);
+                       defaults to the first mask's image
+            remove_small_obj: if set, remove connected components smaller than this
+                              voxel count from each mask before assigning
+            overlap: how to handle overlapping masks
+                - "overwrite": later masks replace earlier labels (default)
+                - "keep_first": earlier labels are preserved
+                - "error": raise ValueError if any masks overlap
+
+        Returns:
+            LabelMapable with labels assigned from the masks
+        """
+        import numpy as np
+
+        if len(masks) != len(values):
+            raise ValueError("masks and values must have the same length")
+
+        if reference is None:
+            first = Roiable(masks[0]) if isinstance(masks[0], str) else masks[0]
+            reference = first.getImage()
+
+        combined = None
+        occupied = None
+
+        for mask_src, value in zip(masks, values):
+            roi = Roiable(mask_src) if isinstance(mask_src, str) else mask_src
+            roi.resampleOnTargetImage(reference)
+
+            mask = roi.getImageAsNumpy() > 0
+
+            if remove_small_obj:
+                tmp = Roiable(image=roi.getImage())
+                tmp.setImageFromNumpy(mask.astype(np.uint8), refimage=reference)
+                tmp.removeSmallObj(remove_small_obj)
+                mask = tmp.getImageAsNumpy() > 0
+
+            if combined is None:
+                combined = np.zeros(mask.shape, dtype=np.uint16)
+                occupied = np.zeros(mask.shape, dtype=bool)
+
+            overlap_mask = mask & occupied
+            if overlap == "error" and np.any(overlap_mask):
+                raise ValueError(f"Mask overlap detected for label {value}")
+
+            if overlap == "keep_first":
+                mask = mask & ~occupied
+
+            combined[mask] = int(value)
+            occupied |= mask
+
+        out = cls()
+        out.setImageFromNumpy(combined, refimage=reference)
+        out.cast("uint16")
+        return out
+
     def getCenterOfGravityCoordinatesPerLabel(self):
         """
         Get the center of gravity of the labelmap per label

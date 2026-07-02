@@ -4,15 +4,11 @@ from pyable import Imaginable, Roiable,LabelMapable
 
 
 image_path = Path(
-    r"C:\Users\montie01\MYDATA\Labrum_Cartilage_Segmentations"
-    r"\Seg 1\IM-0004-0001.dcm (1).nii"
+    "/data/MYDATA/template_cartilage_original/11 AX DIXON_W.nii"
 )
 
 segmentation_path = Path(
-    r"C:\Users\montie01\RESULTS"
-    r"\cartilage_refinement_final_all_features"
-    r"\Seg_1\IM-0004-0001.dcm__1"
-    r"\quality_augmented_joint_full_R.nii.gz"
+    "/data/MYDATA/template_cartilage_original/combined.seg.nii"
 )
 
 output_directory = Path(__file__).parent / "_outputs" / "paraviewfix_labelmappable"
@@ -37,7 +33,9 @@ print("Segmentation:", segmentation_path)
 image = Imaginable(filename=str(image_path))
 segmentation = LabelMapable(filename=str(segmentation_path))
 
-
+S=image.getImageSize()
+image.cropImage([0,0,0,],[int(S[0]/2),0,0,])
+segmentation.cropImage([0,0,0,],[int(S[0]/2),0,0,])
 # Additional safety checks.
 if not image.isImageSet():
     raise RuntimeError("The image was not loaded into Imaginable.")
